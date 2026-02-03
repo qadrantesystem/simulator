@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Simulador de Entrevistas para Technical Leader - Java Backend Banca">
+    <title>Tech Lead Interview Simulator | Banca Edition</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <i class="fas fa-terminal"></i>
+                <span>TechLead<span class="highlight">Simulator</span></span>
+            </div>
+            <nav class="nav">
+                <a href="#inicio" class="nav-link active">Inicio</a>
+                <a href="#categorias" class="nav-link">Categorias</a>
+                <a href="#simulador" class="nav-link">Simulador</a>
+                <a href="#tips" class="nav-link">Tips</a>
+            </nav>
+            <button class="hamburger" id="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section id="inicio" class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <div class="badge">
+                    <i class="fas fa-building-columns"></i>
+                    Banca & Fintech Edition
+                </div>
+                <h1>Simulador de Entrevistas<br><span class="highlight">Technical Leader</span></h1>
+                <p class="hero-description">
+                    Prepárate para tu entrevista de Tech Lead con preguntas reales del sector bancario. 
+                    Arquitectura, Cloud, DevOps, Liderazgo y más. Con respuestas coloquiales y ejemplos de Yape, BCP, Interbank.
+                </p>
+                <div class="hero-stats">
+                    <div class="stat">
+                        <span class="stat-number" id="total-preguntas">50+</span>
+                        <span class="stat-label">Preguntas</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">8</span>
+                        <span class="stat-label">Categorías</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">100%</span>
+                        <span class="stat-label">Banca Real</span>
+                    </div>
+                </div>
+                <div class="hero-actions">
+                    <a href="#simulador" class="btn btn-primary">
+                        <i class="fas fa-play"></i> Iniciar Simulador
+                    </a>
+                    <a href="#categorias" class="btn btn-secondary">
+                        <i class="fas fa-list"></i> Ver Categorías
+                    </a>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="interview-card">
+                    <div class="interviewer">
+                        <div class="avatar">
+                            <i class="fas fa-user-tie"></i>
+                        </div>
+                        <div class="info">
+                            <span class="name">Carlos Mendoza</span>
+                            <span class="role">Arquitecto Principal</span>
+                        </div>
+                    </div>
+                    <div class="question-preview">
+                        <p>"Si el servicio de pagos de luz se cae, ¿cómo evitas que se caiga toda la app de Yape?"</p>
+                    </div>
+                    <div class="typing-indicator">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Categorias Section -->
+    <section id="categorias" class="categorias">
+        <div class="container">
+            <h2 class="section-title">Categorías de <span class="highlight">Preguntas</span></h2>
+            <p class="section-subtitle">Basadas en los requisitos reales de Technical Leader para banca</p>
+            
+            <div class="categorias-grid">
+                <div class="categoria-card" data-categoria="arquitectura">
+                    <div class="categoria-icon">
+                        <i class="fas fa-cubes"></i>
+                    </div>
+                    <h3>Arquitectura</h3>
+                    <p>Microservicios, Hexagonal, DDD, APIs REST, Event-Driven, CQRS</p>
+                    <span class="categoria-count">10 preguntas</span>
+                </div>
+
+                <div class="categoria-card" data-categoria="cloud">
+                    <div class="categoria-icon">
+                        <i class="fas fa-cloud"></i>
+                    </div>
+                    <h3>Cloud & DevOps</h3>
+                    <p>AWS, Azure, Docker, Kubernetes, Terraform, CI/CD, GitOps</p>
+                    <span class="categoria-count">8 preguntas</span>
+                </div>
+
+                <div class="categoria-card" data-categoria="reactivo">
+                    <div class="categoria-icon">
+                        <i class="fas fa-bolt"></i>
+                    </div>
+                    <h3>Programación Reactiva</h3>
+                    <p>WebFlux, Project Reactor, RxJava, R2DBC, Backpressure</p>
+                    <span class="categoria-count">8 preguntas</span>
+                </div>
+
+                <div class="categoria-card" data-categoria="resiliencia">
+                    <div class="categoria-icon">
+                        <i class="fas fa-shield-halved"></i>
+                    </div>
+                    <h3>Resiliencia</h3>
+                    <p>Circuit Breaker, Retry, Timeout, Fallback, Bulkhead, Rate Limiting</p>
+                    <span class="categoria-count">6 preguntas</span>
+                </div>
+
+                <div class="categoria-card" data-categoria="data">
+                    <div class="categoria-icon">
+                        <i class="fas fa-database"></i>
+                    </div>
+                    <h3>Data & Mensajería</h3>
+                    <p>PostgreSQL, MongoDB, Redis, Kafka, Event Sourcing</p>
+                    <span class="categoria-count">6 preguntas</span>
+                </div>
+
+                <div class="categoria-card" data-categoria="seguridad">
+                    <div class="categoria-icon">
+                        <i class="fas fa-lock"></i>
+                    </div>
+                    <h3>Seguridad & Calidad</h3>
+                    <p>OWASP, SAST/DAST, SonarQube, Snyk, Testing, JWT/OAuth</p>
+                    <span class="categoria-count">6 preguntas</span>
+                </div>
+
+                <div class="categoria-card" data-categoria="observabilidad">
+                    <div class="categoria-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3>Observabilidad</h3>
+                    <p>Prometheus, Grafana, Dynatrace, OpenTelemetry, Logs, Traces</p>
+                    <span class="categoria-count">5 preguntas</span>
+                </div>
+
+                <div class="categoria-card" data-categoria="liderazgo">
+                    <div class="categoria-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h3>Liderazgo Técnico</h3>
+                    <p>Code Review, Mentoring, Sprint Planning, Gestión de Conflictos</p>
+                    <span class="categoria-count">8 preguntas</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Simulador Section -->
+    <section id="simulador" class="simulador">
+        <div class="container">
+            <h2 class="section-title">Modo <span class="highlight">Entrevista</span></h2>
+            
+            <!-- Configuración -->
+            <div class="simulador-config" id="config-panel">
+                <h3><i class="fas fa-sliders"></i> Configura tu simulador</h3>
+                
+                <div class="config-options">
+                    <div class="config-group">
+                        <label>Categoría</label>
+                        <select id="select-categoria">
+                            <option value="todas">Todas las categorías</option>
+                            <option value="arquitectura">Arquitectura</option>
+                            <option value="cloud">Cloud & DevOps</option>
+                            <option value="reactivo">Programación Reactiva</option>
+                            <option value="resiliencia">Resiliencia</option>
+                            <option value="data">Data & Mensajería</option>
+                            <option value="seguridad">Seguridad & Calidad</option>
+                            <option value="observabilidad">Observabilidad</option>
+                            <option value="liderazgo">Liderazgo Técnico</option>
+                        </select>
+                    </div>
+                    
+                    <div class="config-group">
+                        <label>Dificultad</label>
+                        <select id="select-dificultad">
+                            <option value="todas">Todas</option>
+                            <option value="junior">Junior/Mid</option>
+                            <option value="senior">Senior</option>
+                            <option value="lead">Tech Lead</option>
+                        </select>
+                    </div>
+                    
+                    <div class="config-group">
+                        <label>Número de preguntas</label>
+                        <select id="select-cantidad">
+                            <option value="5">5 preguntas</option>
+                            <option value="10" selected>10 preguntas</option>
+                            <option value="15">15 preguntas</option>
+                            <option value="todas">Todas</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button class="btn btn-primary btn-large" id="btn-iniciar">
+                    <i class="fas fa-play"></i> Comenzar Entrevista
+                </button>
+            </div>
+
+            <!-- Panel de Entrevista -->
+            <div class="entrevista-panel" id="entrevista-panel" style="display: none;">
+                <!-- Progress -->
+                <div class="entrevista-progress">
+                    <div class="progress-info">
+                        <span>Pregunta <span id="pregunta-actual">1</span> de <span id="pregunta-total">10</span></span>
+                        <span class="categoria-badge" id="categoria-actual">Arquitectura</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill" style="width: 10%"></div>
+                    </div>
+                </div>
+
+                <!-- Entrevistador -->
+                <div class="entrevistador-card">
+                    <div class="entrevistador-header">
+                        <div class="entrevistador-avatar">
+                            <i class="fas fa-user-tie"></i>
+                        </div>
+                        <div class="entrevistador-info">
+                            <span class="entrevistador-nombre">Carlos Mendoza</span>
+                            <span class="entrevistador-rol">Arquitecto Principal - Banco Digital</span>
+                        </div>
+                        <div class="dificultad-badge" id="dificultad-badge">
+                            <i class="fas fa-star"></i> Senior
+                        </div>
+                    </div>
+                    
+                    <div class="pregunta-container">
+                        <p class="pregunta-texto" id="pregunta-texto">
+                            Cargando pregunta...
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Acciones -->
+                <div class="entrevista-actions">
+                    <button class="btn btn-secondary" id="btn-pista">
+                        <i class="fas fa-lightbulb"></i> Dame una pista
+                    </button>
+                    <button class="btn btn-primary" id="btn-respuesta">
+                        <i class="fas fa-eye"></i> Ver Respuesta Modelo
+                    </button>
+                </div>
+
+                <!-- Respuesta (oculta inicialmente) -->
+                <div class="respuesta-container" id="respuesta-container" style="display: none;">
+                    <div class="respuesta-header">
+                        <i class="fas fa-check-circle"></i>
+                        <span>Respuesta Modelo</span>
+                    </div>
+                    
+                    <div class="respuesta-content" id="respuesta-content">
+                        <!-- Contenido dinámico -->
+                    </div>
+
+                    <div class="analogia-box" id="analogia-box">
+                        <div class="analogia-header">
+                            <i class="fas fa-pizza-slice"></i>
+                            <span>Analogía para recordar</span>
+                        </div>
+                        <p id="analogia-texto"></p>
+                    </div>
+
+                    <div class="codigo-box" id="codigo-box" style="display: none;">
+                        <div class="codigo-header">
+                            <i class="fas fa-code"></i>
+                            <span>Código de ejemplo</span>
+                            <button class="btn-copy" id="btn-copy">
+                                <i class="fas fa-copy"></i>
+                            </button>
+                        </div>
+                        <pre><code id="codigo-ejemplo"></code></pre>
+                    </div>
+
+                    <div class="frase-matadora" id="frase-matadora">
+                        <i class="fas fa-quote-left"></i>
+                        <p id="frase-texto"></p>
+                    </div>
+                </div>
+
+                <!-- Navegación -->
+                <div class="entrevista-nav">
+                    <button class="btn btn-ghost" id="btn-anterior" disabled>
+                        <i class="fas fa-arrow-left"></i> Anterior
+                    </button>
+                    <button class="btn btn-ghost" id="btn-terminar">
+                        <i class="fas fa-flag-checkered"></i> Terminar
+                    </button>
+                    <button class="btn btn-primary" id="btn-siguiente">
+                        Siguiente <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Panel de Resultados -->
+            <div class="resultados-panel" id="resultados-panel" style="display: none;">
+                <div class="resultados-header">
+                    <i class="fas fa-trophy"></i>
+                    <h3>¡Entrevista Completada!</h3>
+                </div>
+                
+                <div class="resultados-stats">
+                    <div class="resultado-stat">
+                        <span class="resultado-numero" id="preguntas-vistas">10</span>
+                        <span class="resultado-label">Preguntas revisadas</span>
+                    </div>
+                    <div class="resultado-stat">
+                        <span class="resultado-numero" id="categorias-cubiertas">5</span>
+                        <span class="resultado-label">Categorías cubiertas</span>
+                    </div>
+                </div>
+
+                <div class="resultados-tips">
+                    <h4><i class="fas fa-lightbulb"></i> Consejos para tu entrevista real</h4>
+                    <ul>
+                        <li>Usa el método <strong>STAR</strong> para respuestas de experiencia</li>
+                        <li>Siempre usa <strong>analogías</strong> para explicar conceptos técnicos</li>
+                        <li>Menciona <strong>tecnologías específicas</strong> que has usado</li>
+                        <li>Habla en <strong>plural</strong> ("construimos", "logramos")</li>
+                        <li>Prepara una <strong>pregunta para el entrevistador</strong> al final</li>
+                    </ul>
+                </div>
+
+                <div class="resultados-actions">
+                    <button class="btn btn-primary" id="btn-reiniciar">
+                        <i class="fas fa-redo"></i> Nueva Entrevista
+                    </button>
+                    <button class="btn btn-secondary" id="btn-revisar">
+                        <i class="fas fa-list"></i> Revisar Respuestas
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tips Section -->
+    <section id="tips" class="tips">
+        <div class="container">
+            <h2 class="section-title">Tips para <span class="highlight">Brillar</span></h2>
+            
+            <div class="tips-grid">
+                <div class="tip-card">
+                    <div class="tip-icon">
+                        <i class="fas fa-star"></i>
+                    </div>
+                    <h3>Método STAR</h3>
+                    <p><strong>S</strong>ituación, <strong>T</strong>area, <strong>A</strong>cción, <strong>R</strong>esultado. Usa esta estructura para contar experiencias.</p>
+                    <div class="tip-example">
+                        "En BCP (S), lideré la migración a microservicios (T), implementé Circuit Breaker con Resilience4j (A), reducimos caídas en 80% (R)."
+                    </div>
+                </div>
+
+                <div class="tip-card">
+                    <div class="tip-icon">
+                        <i class="fas fa-pizza-slice"></i>
+                    </div>
+                    <h3>Usa Analogías</h3>
+                    <p>Explica conceptos técnicos con ejemplos del mundo real. Demuestra que puedes comunicar a cualquier audiencia.</p>
+                    <div class="tip-example">
+                        "Circuit Breaker es como el fusible de tu casa: si hay cortocircuito, corta para que no se queme todo."
+                    </div>
+                </div>
+
+                <div class="tip-card">
+                    <div class="tip-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <h3>Habla en Plural</h3>
+                    <p>Un líder habla del equipo, no de sí mismo. Usa "construimos", "logramos", "implementamos".</p>
+                    <div class="tip-example">
+                        "No quiero ser el mejor developer del equipo. Quiero ser el líder del mejor equipo de developers."
+                    </div>
+                </div>
+
+                <div class="tip-card">
+                    <div class="tip-icon">
+                        <i class="fas fa-question-circle"></i>
+                    </div>
+                    <h3>Pregunta al Final</h3>
+                    <p>NUNCA digas "no tengo preguntas". Prepara 2-3 preguntas inteligentes sobre el equipo o los desafíos.</p>
+                    <div class="tip-example">
+                        "¿Cuál es el mayor desafío técnico que enfrenta el equipo actualmente?"
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <i class="fas fa-terminal"></i>
+                    <span>TechLead<span class="highlight">Simulator</span></span>
+                </div>
+                <p class="footer-tagline">"Backend no solo se hace... se entiende, se vive, se domina."</p>
+                <div class="footer-links">
+                    <a href="https://github.com/acairampoma" target="_blank"><i class="fab fa-github"></i></a>
+                    <a href="https://linkedin.com/in/alancairampomacarrillo" target="_blank"><i class="fab fa-linkedin"></i></a>
+                </div>
+                <p class="footer-copy">&copy; 2025 WorldReactive. Creado para futuros Tech Leads.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/preguntas.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

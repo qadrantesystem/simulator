@@ -1,0 +1,659 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "totalPreguntas": 65,
+    "categorias": ["arquitectura", "reactivo", "resiliencia", "cloud", "data", "seguridad", "observabilidad", "liderazgo", "patrones", "azure", "fundamentos"]
+  },
+  "preguntas": [
+    {
+      "id": 1,
+      "categoria": "arquitectura",
+      "dificultad": "senior",
+      "pregunta": "Si tuvieras que diseñar la arquitectura de APIs para una app tipo Yape (saldos, transferencias, pagos), ¿cómo la estructurarías?",
+      "respuesta": "<p>Usaría <strong>3 capas de APIs</strong>:</p><ul><li><strong>API de Experiencia (BFF)</strong> - Es el MOZO. Orquesta llamadas, junta datos y entrega al cliente. Uso WebFlux.</li><li><strong>API de Negocio</strong> - Son las COCINAS especializadas. Un microservicio por dominio.</li><li><strong>API de Sincronización</strong> - El ALMACÉN VIEJO. Conecta con el core bancario legacy.</li></ul><p>Regla de oro: <strong>NUNCA expones el negocio directamente</strong>.</p>",
+      "analogia": "Es como una pollería: el mozo (experiencia) atiende, las cocinas (negocio) preparan, el almacén (sincronización) tiene la materia prima.",
+      "codigo": "@Bean\npublic RouteLocator routes(RouteLocatorBuilder builder) {\n    return builder.routes()\n        .route(\"saldos\", r -> r\n            .path(\"/api/saldos/**\")\n            .filters(f -> f.circuitBreaker(c -> c.setName(\"saldosCB\")))\n            .uri(\"lb://ms-saldos\"))\n        .build();\n}",
+      "frase": "Las APIs de experiencia son el mozo, las de negocio son las cocinas, y las de sincronización van al almacén viejo."
+    },
+    {
+      "id": 2,
+      "categoria": "arquitectura",
+      "dificultad": "lead",
+      "pregunta": "Explícame la diferencia entre Arquitectura Hexagonal y Clean Architecture. ¿Cuándo usarías cada una?",
+      "respuesta": "<p>Ambas separan negocio de infraestructura:</p><ul><li><strong>Hexagonal (Ports & Adapters)</strong> - Tu negocio es una ISLA. Los puertos son MUELLES donde llegan barcos (adaptadores).</li><li><strong>Clean Architecture</strong> - CAPAS DE CEBOLLA. Centro = negocio, capas externas dependen de internas.</li></ul><p><strong>Hexagonal:</strong> Muchas integraciones externas. <strong>Clean:</strong> Dominio muy complejo.</p>",
+      "analogia": "Hexagonal es una isla con muelles para distintos barcos. Clean es una cebolla con capas que protegen el centro.",
+      "codigo": "// Puerto (interface)\npublic interface CuentaRepository {\n    Mono<Cuenta> findById(String id);\n}\n\n// Adaptador MongoDB\n@Repository\npublic class CuentaMongoAdapter implements CuentaRepository {\n    public Mono<Cuenta> findById(String id) {\n        return mongoTemplate.findById(id, CuentaDocument.class)\n            .map(this::toDomain);\n    }\n}",
+      "frase": "Hexagonal te permite cambiar de MongoDB a PostgreSQL sin tocar una línea del negocio."
+    },
+    {
+      "id": 3,
+      "categoria": "arquitectura",
+      "dificultad": "lead",
+      "pregunta": "¿Qué es CQRS y cuándo lo aplicarías en un sistema bancario?",
+      "respuesta": "<p>CQRS = DOS PIZARRAS:</p><ul><li><strong>Command (Escritura)</strong> - Operaciones complejas, validaciones. PostgreSQL normalizado.</li><li><strong>Query (Lectura)</strong> - Optimizada para mostrar. MongoDB/Redis desnormalizado.</li></ul><p><strong>Usar cuando:</strong> Lees mucho más de lo que escribes (80/20). Historial de movimientos en Yape.</p>",
+      "analogia": "Dos pizarras: una para escribir con calma (validaciones) y otra para leer volando (optimizada).",
+      "codigo": "// Command - Escribir\npublic Mono<Void> transferir(TransferenciaCmd cmd) {\n    return cuentaRepo.findById(cmd.getOrigen())\n        .flatMap(cuenta -> cuenta.debitar(cmd.getMonto()))\n        .then(eventPublisher.publish(new TransferenciaEvent(cmd)));\n}\n\n// Query - Leer\npublic Flux<MovimientoDTO> getMovimientos(String cuentaId) {\n    return movimientoReadRepo.findByCuentaId(cuentaId);\n}",
+      "frase": "Con CQRS, cuando abres Yape la consulta vuela porque va a una base optimizada solo para leer."
+    },
+    {
+      "id": 4,
+      "categoria": "arquitectura",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es Event Sourcing y por qué es importante en banca?",
+      "respuesta": "<p>Guardar TODO lo que pasó, no solo el estado actual:</p><ul><li><strong>Sin ES:</strong> Solo sé que tienes S/1,500.</li><li><strong>Con ES:</strong> Guardo CADA movimiento y puedo reconstruir el saldo.</li></ul><p><strong>En banca:</strong> Auditoría SBS, viaje en el tiempo, detección de fraudes, replay de eventos.</p>",
+      "analogia": "No solo sé que tienes S/1,500, sé EXACTAMENTE cómo llegaste ahí con cada movimiento.",
+      "codigo": "public record TransferenciaRealizada(\n    String id, String origen, String destino,\n    BigDecimal monto, Instant timestamp\n) {}\n\npublic Cuenta reconstruir(String cuentaId) {\n    return eventStore.getEvents(cuentaId)\n        .reduce(Cuenta.vacia(), Cuenta::aplicarEvento);\n}",
+      "frase": "En banca, Event Sourcing no es opcional. Los reguladores te piden trazabilidad completa."
+    },
+    {
+      "id": 5,
+      "categoria": "arquitectura",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo manejas transacciones distribuidas entre microservicios? Ejemplo: transferencia interbancaria.",
+      "respuesta": "<p>En microservicios NO usas ACID tradicional. Usas <strong>SAGA</strong>:</p><ul><li>CTRL+Z para cada paso. Si falla paso 4, deshago 3, 2, 1.</li><li><strong>Orquestada:</strong> Un director controla todo.</li><li><strong>Coreografiada:</strong> Cada servicio reacciona a eventos.</li></ul>",
+      "analogia": "SAGA es como comprar en cuotas: si falla el paso 4, te desbloquean el monto y eliminan las cuotas.",
+      "codigo": "@Service\npublic class TransferenciaOrquestador {\n    public Mono<Void> ejecutar(TransferenciaCmd cmd) {\n        return validarSaldo(cmd)\n            .then(debitarOrigen(cmd))\n            .then(llamarBancoDestino(cmd))\n            .onErrorResume(e -> compensar(cmd, e));\n    }\n    \n    private Mono<Void> compensar(TransferenciaCmd cmd, Throwable e) {\n        return revertirDebito(cmd)\n            .then(notificarUsuario(cmd, \"Fallido\"));\n    }\n}",
+      "frase": "En microservicios no hay transacciones mágicas. SAGA es tu CTRL+Z distribuido."
+    },
+    {
+      "id": 6,
+      "categoria": "reactivo",
+      "dificultad": "senior",
+      "pregunta": "¿Por qué usarías programación reactiva en Yape? Explícalo para el Gerente de Producto.",
+      "respuesta": "<p><strong>TRADICIONAL:</strong> Pollo a la brasa - te quedas PARADO esperando 20 min. 1000 clientes = 1000 cajas.</p><p><strong>REACTIVO:</strong> Food court con BEEPER - pides, te dan beeper, te sientas. Te avisan cuando está listo.</p><p><strong>Beneficio:</strong> 100,000 usuarios con 10 servidores (reactivo) vs 100 servidores (tradicional). <strong>90% ahorro.</strong></p>",
+      "analogia": "Reactivo es el food court con beeper: no te quedas parado esperando, te avisan cuando está listo.",
+      "codigo": "// Tradicional - BLOQUEANTE\npublic Saldo getSaldo(String id) {\n    return repository.findById(id); // Hilo BLOQUEADO\n}\n\n// Reactivo - NO BLOQUEANTE\npublic Mono<Saldo> getSaldo(String id) {\n    return repository.findById(id); // Hilo LIBRE\n}",
+      "frase": "Reactivo = menos plata en servidores, más clientes atendidos. En hora punta, es caerse o seguir funcionando."
+    },
+    {
+      "id": 7,
+      "categoria": "reactivo",
+      "dificultad": "senior",
+      "pregunta": "¿Cuál es la diferencia entre Mono y Flux? Dame ejemplos en Yape.",
+      "respuesta": "<p><strong>MONO = Un paquete.</strong> Yapear S/50 = UNA respuesta (éxito o falló).</p><p><strong>FLUX = Muchos paquetes (streaming).</strong> Ver movimientos = MUCHOS llegan, como suscripción mensual.</p><p><strong>Ejemplos:</strong> Mono<TransferenciaResponse>, Mono<Saldo>, Flux<Movimiento>, Flux<Notificacion>.</p>",
+      "analogia": "Mono es un delivery único. Flux es una suscripción donde siguen llegando paquetes.",
+      "codigo": "// MONO - Una respuesta\npublic Mono<TransferenciaResponse> yapear(YapeRequest req) {\n    return validar(req)\n        .flatMap(this::ejecutar)\n        .map(this::construirResponse);\n}\n\n// FLUX - Stream\npublic Flux<Movimiento> getMovimientos(String cuentaId) {\n    return movimientoRepo.findByCuentaId(cuentaId).take(50);\n}",
+      "frase": "Mono para yapear (una respuesta). Flux para movimientos (stream de datos)."
+    },
+    {
+      "id": 8,
+      "categoria": "reactivo",
+      "dificultad": "lead",
+      "pregunta": "¿Cuál es la diferencia entre map y flatMap en programación reactiva?",
+      "respuesta": "<p><strong>MAP:</strong> Transformas el valor directamente. Naranja → jugo. Síncrono.</p><p><strong>FLATMAP:</strong> Tu transformación retorna otro Mono/Flux. Aplanas para evitar Mono<Mono<T>>.</p><p><strong>Regla:</strong> ¿Retorna valor normal? → MAP. ¿Retorna Mono/Flux? → FLATMAP.</p>",
+      "analogia": "Map es agregarle queso a la pizza. FlatMap es cuando tu pizza trae otra pizza y abres ambas cajas.",
+      "codigo": "// MAP - valor directo\nMono<String> nombre = usuarioMono\n    .map(u -> u.getNombre());\n\n// FLATMAP - retorna Mono\nMono<Cuenta> cuenta = usuarioMono\n    .flatMap(u -> cuentaRepo.findByUsuarioId(u.getId()));",
+      "frase": "Map para transformar datos, flatMap para llamar otros servicios reactivos."
+    },
+    {
+      "id": 9,
+      "categoria": "reactivo",
+      "dificultad": "lead",
+      "pregunta": "¿Qué es backpressure y cómo lo manejas cuando Kafka produce más eventos de los que puedes procesar?",
+      "respuesta": "<p>Backpressure = el MOZO le dice a la COCINA: ¡PARA! No me doy abasto.</p><p><strong>Sin backpressure:</strong> Memoria llena → OutOfMemory → 💀</p><p><strong>Estrategias:</strong> Buffer (cola limitada), Drop (descartar), Latest (solo el reciente), Error (fallar si saturan).</p>",
+      "analogia": "El mozo diciéndole a la cocina: 'Para, no me doy abasto con tantos platos'.",
+      "codigo": "Flux.fromIterable(eventos)\n    .onBackpressureBuffer(1000)\n    .onBackpressureDrop(e -> log.warn(\"Descartado: {}\", e))\n    .flatMap(this::procesar, 10) // Max 10 paralelo\n    .subscribe();",
+      "frase": "Sin backpressure, Kafka te ahoga. Con backpressure, tú controlas cuántos puedes masticar."
+    },
+    {
+      "id": 10,
+      "categoria": "reactivo",
+      "dificultad": "senior",
+      "pregunta": "¿Diferencia entre RxJava y Project Reactor? ¿Cuándo usar cada uno?",
+      "respuesta": "<p><strong>RxJava:</strong> Single, Maybe, Observable, Flowable, Completable. Nació para Android.</p><p><strong>Reactor:</strong> Mono, Flux. Nació para Spring. Integración nativa con WebFlux.</p><p><strong>Usar:</strong> RxJava para Android/legacy. Reactor para Spring/proyectos nuevos.</p>",
+      "analogia": "RxJava tiene muchos tipos de vasos. Reactor es más simple: vaso chico (Mono) y vaso grande (Flux).",
+      "codigo": "// RxJava\nSingle<Usuario> usuario = Single.just(new Usuario());\nMaybe<Cuenta> cuenta = Maybe.empty();\nFlowable<Evento> eventos = Flowable.fromIterable(lista);\n\n// Reactor\nMono<Usuario> usuario = Mono.just(new Usuario());\nFlux<Evento> eventos = Flux.fromIterable(lista);",
+      "frase": "Si tu stack es Spring, usa Reactor. No mezcles ambos en el mismo proyecto."
+    },
+    {
+      "id": 11,
+      "categoria": "resiliencia",
+      "dificultad": "senior",
+      "pregunta": "El servicio de pago de luz en Yape está lento o caído. ¿Cómo evitas que se caiga toda la app?",
+      "respuesta": "<p>Patrones de resiliencia con Resilience4j:</p><ul><li><strong>Circuit Breaker:</strong> Fusible - 5 fallas seguidas, abro circuito.</li><li><strong>Timeout:</strong> 5 segundos máximo, corto.</li><li><strong>Retry:</strong> 3 intentos con backoff (1s, 2s, 4s).</li><li><strong>Fallback:</strong> Cache o mensaje 'No disponible'.</li><li><strong>Bulkhead:</strong> Pool separado, no afecta otros servicios.</li></ul>",
+      "analogia": "Circuit Breaker es el fusible de tu casa: si hay cortocircuito, corta para que no se queme todo.",
+      "codigo": "@CircuitBreaker(name = \"servicioLuz\", fallbackMethod = \"fallback\")\n@Retry(name = \"servicioLuz\")\n@TimeLimiter(name = \"servicioLuz\")\npublic Mono<DeudaDTO> consultarDeuda(String suministro) {\n    return webClient.get()\n        .uri(\"/deudas/{s}\", suministro)\n        .retrieve()\n        .bodyToMono(DeudaDTO.class);\n}\n\npublic Mono<DeudaDTO> fallback(String s, Throwable t) {\n    return cacheService.getUltimaDeuda(s);\n}",
+      "frase": "Diseña para el FALLO, no para el éxito. Tu app no debe caerse con el servicio externo."
+    },
+    {
+      "id": 12,
+      "categoria": "resiliencia",
+      "dificultad": "lead",
+      "pregunta": "Explícame los estados del Circuit Breaker y cómo configurarías umbrales para pagos.",
+      "respuesta": "<p><strong>3 estados:</strong></p><ul><li><strong>CLOSED:</strong> Normal, requests pasan, cuento fallas.</li><li><strong>OPEN:</strong> Muchas fallas, corté. Requests fallan inmediato.</li><li><strong>HALF-OPEN:</strong> Probando si se recuperó.</li></ul><p><strong>Config pagos:</strong> 50% fallas abre, 30s espera, 3 requests de prueba, ventana de 10.</p>",
+      "analogia": "Fusible: CERRADO = corriente pasa. ABIERTO = cortó. SEMI-ABIERTO = probando si ya se arregló.",
+      "codigo": "resilience4j:\n  circuitbreaker:\n    instances:\n      servicioPagos:\n        failureRateThreshold: 50\n        waitDurationInOpenState: 30s\n        permittedNumberOfCallsInHalfOpenState: 3\n        slidingWindowSize: 10\n        slowCallRateThreshold: 80\n        slowCallDurationThreshold: 3s",
+      "frase": "Circuit Breaker mal configurado es peor que no tener. Muy sensible = se abre por nada. Muy tolerante = no protege."
+    },
+    {
+      "id": 13,
+      "categoria": "resiliencia",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es el patrón Bulkhead y cómo lo aplicarías en banca?",
+      "respuesta": "<p>Bulkhead = compartimentos de un BARCO. Si uno se inunda, los demás no se hunden.</p><p><strong>En Yape:</strong> Pool saldos: 20 hilos. Pool transferencias: 30 hilos. Pool pagos: 15 hilos. Si pagos se satura, saldos sigue funcionando.</p>",
+      "analogia": "Compartimentos del barco: si uno se inunda, los demás siguen a flote.",
+      "codigo": "@Bulkhead(name = \"pagoServicios\", type = Bulkhead.Type.THREADPOOL)\npublic Mono<PagoResponse> pagarServicio(PagoRequest req) {\n    return servicioExternoClient.pagar(req);\n}\n\n# Config\nresilience4j.bulkhead.instances.pagoServicios:\n  maxConcurrentCalls: 15\n  maxWaitDuration: 500ms",
+      "frase": "Sin Bulkhead, un servicio lento consume todos los hilos y tumba toda la app."
+    },
+    {
+      "id": 14,
+      "categoria": "cloud",
+      "dificultad": "senior",
+      "pregunta": "¿Cómo diseñarías un pipeline CI/CD para microservicios bancarios?",
+      "respuesta": "<p>Pipeline seguro y auditable:</p><ul><li><strong>Build & Test:</strong> Compilar, unit tests, cobertura 80%.</li><li><strong>Security:</strong> SonarQube (SAST), Snyk (deps), Trivy (container).</li><li><strong>Build Image:</strong> Docker, tag semántico.</li><li><strong>Deploy DEV:</strong> Automático.</li><li><strong>Deploy QA:</strong> Aprobación manual.</li><li><strong>Deploy PROD:</strong> Doble aprobación + Blue-Green.</li></ul>",
+      "analogia": "Línea de producción de autos: cada estación verifica algo, si falla una inspección, el auto no sale.",
+      "codigo": "name: CI/CD Pipeline\non: [push]\njobs:\n  build-test:\n    steps:\n      - run: ./gradlew build test\n      - run: ./gradlew sonarqube\n      - uses: snyk/actions/gradle@master\n  \n  deploy-prod:\n    needs: build-test\n    environment: production\n    steps:\n      - run: ./scripts/blue-green-deploy.sh",
+      "frase": "En banca, el pipeline es tu primera línea de defensa. Si pasa, debería ser seguro para producción."
+    },
+    {
+      "id": 15,
+      "categoria": "cloud",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo gestionas secretos en microservicios desplegados en Kubernetes?",
+      "respuesta": "<p>NUNCA secretos en código. Usar:</p><ul><li><strong>Azure Key Vault / AWS Secrets Manager / Vault:</strong> Almacén centralizado con rotación.</li><li><strong>External Secrets Operator:</strong> Sincroniza del Vault a K8s.</li><li><strong>Workload Identity:</strong> Pod se autentica sin credenciales hardcodeadas.</li></ul>",
+      "analogia": "Secretos son llaves de la bóveda: no las dejas pegadas en la puerta. Las guardas en caja fuerte.",
+      "codigo": "apiVersion: external-secrets.io/v1beta1\nkind: ExternalSecret\nmetadata:\n  name: db-credentials\nspec:\n  refreshInterval: 1h\n  secretStoreRef:\n    name: azure-keyvault\n  data:\n    - secretKey: password\n      remoteRef:\n        key: db-password",
+      "frase": "Secreto hardcodeado en código = red flag. En banca, puede costarte la certificación PCI-DSS."
+    },
+    {
+      "id": 16,
+      "categoria": "cloud",
+      "dificultad": "senior",
+      "pregunta": "¿Diferencia entre HPA y VPA en Kubernetes? ¿Cuándo usar cada uno?",
+      "respuesta": "<p><strong>HPA (Horizontal):</strong> Agrega MÁS pods. Abrir más cajas en el banco.</p><p><strong>VPA (Vertical):</strong> Hace cada pod MÁS POTENTE. Poner cajero más rápido.</p><p><strong>Usar:</strong> HPA para microservicios stateless (mayoría). VPA para apps que no escalan horizontal (BD).</p>",
+      "analogia": "HPA = abrir más cajas. VPA = poner cajero más rápido. En banca digital, casi siempre queremos más cajas.",
+      "codigo": "apiVersion: autoscaling/v2\nkind: HorizontalPodAutoscaler\nmetadata:\n  name: ms-transferencias\nspec:\n  scaleTargetRef:\n    kind: Deployment\n    name: ms-transferencias\n  minReplicas: 3\n  maxReplicas: 20\n  metrics:\n    - type: Resource\n      resource:\n        name: cpu\n        target:\n          averageUtilization: 70",
+      "frase": "En hora punta, HPA escala de 3 a 15 pods automáticamente. Pagas solo lo que usas."
+    },
+    {
+      "id": 17,
+      "categoria": "data",
+      "dificultad": "senior",
+      "pregunta": "¿Cuándo usarías Redis en arquitectura bancaria y qué patrones implementarías?",
+      "respuesta": "<p>Redis = memoria de corto plazo súper rápida:</p><ul><li><strong>Cache saldos:</strong> Consulta instantánea, TTL 30s.</li><li><strong>Rate Limiting:</strong> Máx 100 consultas/usuario/minuto.</li><li><strong>Sesiones:</strong> Tokens distribuidos entre pods.</li><li><strong>Locks distribuidos:</strong> Evitar doble procesamiento.</li></ul><p><strong>Patrones:</strong> Cache-Aside (busco cache, si no BD), Write-Through.</p>",
+      "analogia": "Redis es memoria de trabajo: guardas lo que necesitas rápido, lo importante está en el disco (BD).",
+      "codigo": "@Cacheable(value = \"saldos\", key = \"#cuentaId\")\npublic Mono<Saldo> getSaldo(String cuentaId) {\n    return saldoRepository.findByCuentaId(cuentaId);\n}\n\n@CacheEvict(value = \"saldos\", key = \"#cuentaId\")\npublic Mono<Void> actualizarSaldo(String cuentaId, BigDecimal nuevo) {\n    return saldoRepository.actualizar(cuentaId, nuevo);\n}",
+      "frase": "Sin Redis, cada consulta va a BD. Con Redis, 90% se responden en milisegundos desde memoria."
+    },
+    {
+      "id": 18,
+      "categoria": "data",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo garantizas el orden de mensajes en Kafka para transacciones bancarias?",
+      "respuesta": "<p>Orden garantizado SOLO dentro de una partición:</p><ul><li><strong>Partition Key = ID cuenta:</strong> Todas las tx de misma cuenta → misma partición → orden.</li><li><strong>Un consumer por partición:</strong> 10 particiones = máx 10 consumers.</li><li><strong>Idempotencia:</strong> Si reprocesa, no duplica.</li></ul><p><strong>Config:</strong> acks=all, enable.idempotence=true.</p>",
+      "analogia": "Kafka es filas del banco: cada fila (partición) mantiene su orden. Tu DNI (cuenta) define tu fila.",
+      "codigo": "// Productor con partition key\npublic Mono<Void> publicarTransaccion(Transaccion tx) {\n    return Mono.fromFuture(\n        kafkaTemplate.send(\"transacciones\",\n            tx.getCuentaId(),  // Partition key\n            tx)\n        .toCompletableFuture()\n    ).then();\n}",
+      "frase": "En Kafka, orden es por partición. Usa ID de cuenta como partition key para orden garantizado."
+    },
+    {
+      "id": 19,
+      "categoria": "seguridad",
+      "dificultad": "senior",
+      "pregunta": "¿Cuáles son las vulnerabilidades OWASP Top 10 más comunes en APIs bancarias?",
+      "respuesta": "<p>Las más comunes:</p><ul><li><strong>A01 Broken Access Control:</strong> Usuario accede a datos de otro. Validar ownership.</li><li><strong>A02 Cryptographic Failures:</strong> Datos sin encriptar. TLS 1.3, no loggear PII.</li><li><strong>A03 Injection:</strong> SQL injection. Queries parametrizados.</li><li><strong>A07 Security Misconfiguration:</strong> Headers faltantes, errores verbosos.</li></ul><p><strong>Herramientas:</strong> SonarQube (SAST), OWASP ZAP (DAST), Snyk.</p>",
+      "analogia": "OWASP es checklist de seguridad del banco: cerraduras (auth), cámaras (logging), bóveda (cifrado).",
+      "codigo": "// MAL - Broken Access Control\n@GetMapping(\"/cuentas/{id}\")\npublic Mono<Cuenta> getCuenta(@PathVariable String id) {\n    return cuentaRepo.findById(id); // Cualquiera accede!\n}\n\n// BIEN\n@GetMapping(\"/cuentas/{id}\")\npublic Mono<Cuenta> getCuenta(@PathVariable String id, Principal p) {\n    return cuentaRepo.findById(id)\n        .filter(c -> c.getUsuarioId().equals(p.getName()))\n        .switchIfEmpty(Mono.error(new AccessDeniedException(\"No\")));\n}",
+      "frase": "Vulnerabilidad OWASP en banca no es solo bug, es riesgo regulatorio. La SBS puede multarte."
+    },
+    {
+      "id": 20,
+      "categoria": "seguridad",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo implementas estrategia de testing completa para microservicios bancarios?",
+      "respuesta": "<p>Pirámide de testing:</p><ul><li><strong>Unit (70%):</strong> Lógica aislada, mocks, cobertura 80%.</li><li><strong>Integration (20%):</strong> BD real (Testcontainers), APIs mockeadas (WireMock).</li><li><strong>E2E (10%):</strong> Flujos críticos completos.</li></ul><p><strong>Adicional:</strong> Contract (Pact), Performance (Gatling), Chaos, Security (SAST/DAST).</p>",
+      "analogia": "Control de calidad en fábrica: unit revisa piezas, integration el ensamblaje, E2E el producto final.",
+      "codigo": "// Unit Test\n@Test\nvoid debeRechazarSinSaldo() {\n    when(cuentaRepo.findById(\"123\")).thenReturn(Mono.just(cuentaSaldo0));\n    StepVerifier.create(service.transferir(cmd))\n        .expectError(SaldoInsuficienteException.class)\n        .verify();\n}\n\n// Integration con Testcontainers\n@Testcontainers\nclass TransferenciaIT {\n    @Container\n    static PostgreSQLContainer<?> pg = new PostgreSQLContainer<>(\"postgres:15\");\n}",
+      "frase": "Bug en producción puede costar millones. Invertir en testing es más barato que transferencia duplicada."
+    },
+    {
+      "id": 21,
+      "categoria": "observabilidad",
+      "dificultad": "senior",
+      "pregunta": "¿Cómo implementas los 3 pilares de observabilidad (logs, métricas, traces)?",
+      "respuesta": "<p><strong>LOGS:</strong> Qué pasó. JSON estructurado, correlation ID. ELK/CloudWatch.</p><p><strong>MÉTRICAS:</strong> Cuánto pasó. Latencia, throughput, errores. Prometheus + Grafana.</p><p><strong>TRACES:</strong> Cómo pasó. Flujo del request. Jaeger/Zipkin + OpenTelemetry.</p><p><strong>Correlation ID:</strong> Un ID único que se propaga a TODOS los servicios.</p>",
+      "analogia": "Investigar crimen: logs son testimonios, métricas son estadísticas del barrio, traces son cámaras de seguridad.",
+      "codigo": "@Component\npublic class CorrelationIdFilter implements WebFilter {\n    public Mono<Void> filter(ServerWebExchange ex, WebFilterChain chain) {\n        String corrId = ex.getRequest().getHeaders()\n            .getFirst(\"X-Correlation-ID\");\n        if (corrId == null) corrId = UUID.randomUUID().toString();\n        return chain.filter(ex)\n            .contextWrite(ctx -> ctx.put(\"correlationId\", corrId));\n    }\n}",
+      "frase": "Sin observabilidad, debuggear microservicios es buscar aguja en pajar. Con correlation ID, sigues un hilo rojo."
+    },
+    {
+      "id": 22,
+      "categoria": "observabilidad",
+      "dificultad": "lead",
+      "pregunta": "¿Qué métricas RED y USE monitorearías para servicio de transferencias?",
+      "respuesta": "<p><strong>RED (servicios):</strong></p><ul><li><strong>Rate:</strong> Requests/seg. Alerta: >2000 o <100.</li><li><strong>Errors:</strong> % errores. Normal <1%, alerta >5%.</li><li><strong>Duration:</strong> Latencia p95. Normal <200ms, alerta >500ms.</li></ul><p><strong>USE (recursos):</strong> Utilization >80%, Saturation (queue >100), Errors.</p>",
+      "analogia": "RED es tablero del auto: velocidad, warnings, temperatura. USE es revisar el motor.",
+      "codigo": "groups:\n  - name: transferencias\n    rules:\n      - alert: AltaLatencia\n        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{service=\"ms-transferencias\"}[5m])) > 0.5\n        for: 2m\n        labels:\n          severity: warning\n      \n      - alert: AltaTasaErrores\n        expr: rate(http_requests_total{status=~\"5..\"}[5m]) / rate(http_requests_total[5m]) > 0.05\n        for: 1m\n        labels:\n          severity: critical",
+      "frase": "RED dice si usuarios están felices. USE dice si infraestructura está sufriendo. Necesitas ambas."
+    },
+    {
+      "id": 23,
+      "categoria": "liderazgo",
+      "dificultad": "lead",
+      "pregunta": "Un developer senior no sigue estándares y hace todo a su manera. ¿Cómo manejas la situación?",
+      "respuesta": "<p>NO confrontar públicamente:</p><ul><li><strong>1. Conversación 1 a 1:</strong> 'Axel, veo oportunidad de alto impacto.'</li><li><strong>2. Involucrarlo:</strong> '¿Creamos píldoras de conocimiento juntos?'</li><li><strong>3. Darle ownership:</strong> Responsable de estándares de su área.</li><li><strong>4. Reconocimiento público:</strong> 'Gracias a Axel tenemos guías que todos usan.'</li></ul><p><strong>Clave:</strong> Canalizar experiencia hacia el bien del equipo.</p>",
+      "analogia": "Senior rebelde es líder sin dirección. Mi trabajo es darle dirección. No cambio personas, canalizo talentos.",
+      "codigo": null,
+      "frase": "Ya no quiero ser el mejor developer. Quiero ser el líder del mejor equipo de developers."
+    },
+    {
+      "id": 24,
+      "categoria": "liderazgo",
+      "dificultad": "lead",
+      "pregunta": "Estás en medio del sprint y llega un pedido urgente no planificado. ¿Qué haces?",
+      "respuesta": "<p>Proceso para urgencias:</p><ul><li><strong>1. Evaluar:</strong> ¿Es urgente o solo importante? ¿Quién pide y por qué?</li><li><strong>2. Negociar scope:</strong> 'Podemos hacerlo, pero sacamos X del sprint.'</li><li><strong>3. Transparencia:</strong> Explicar al equipo el cambio y el porqué.</li><li><strong>4. Proteger:</strong> Si es muy disruptivo, negociar para siguiente sprint.</li><li><strong>5. Documentar:</strong> Para la retro.</li></ul>",
+      "analogia": "Sprint es un vuelo: ya despegaste con cierta carga. Si metes más equipaje, algo tiene que salir.",
+      "codigo": null,
+      "frase": "Mi trabajo es ser el escudo del equipo. Filtro urgencias falsas y solo dejo pasar las que importan."
+    },
+    {
+      "id": 25,
+      "categoria": "liderazgo",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo haces code reviews efectivos sin desmotivar al equipo?",
+      "respuesta": "<p>Principios:</p><ul><li><strong>1. Criticar código, no persona:</strong> 'Este método podría...' vs 'Hiciste mal...'</li><li><strong>2. Preguntar, no afirmar:</strong> '¿Consideraste usar X?'</li><li><strong>3. Explicar el porqué:</strong> 'Esto puede causar memory leak porque...'</li><li><strong>4. Reconocer lo bueno:</strong> Si algo está bien, decirlo.</li><li><strong>5. Ser oportuno:</strong> Review en 24h.</li></ul>",
+      "analogia": "Code review es ser coach: señalas jugadas a mejorar pero celebras los goles. Solo criticar mata motivación.",
+      "codigo": "// MAL\n\"Esto está mal. Deberías saber que no se hace así.\"\n\n// BIEN\n\"¿Qué te parece extraer este bloque a un método privado?\nMejoraría legibilidad y facilitaría testearlo.\n\nprivate Mono<Saldo> validarSaldo(Cuenta cuenta) {\n    // lógica\n}\n\n¿Qué opinas?\"",
+      "frase": "Buen code review enseña. Mal code review humilla. La diferencia está en cómo formulas el feedback."
+    },
+    {
+      "id": 26,
+      "categoria": "liderazgo",
+      "dificultad": "lead",
+      "pregunta": "¿Por qué quieres ser Technical Leader y no seguir como Developer Senior?",
+      "respuesta": "<p>Motivación:</p><ul><li><strong>Multiplicar impacto:</strong> Un developer escribe X líneas. Un líder que forma 5 developers multiplica por 5.</li><li><strong>Del singular al plural:</strong> No es 'lo que yo hice', es 'lo que CONSTRUIMOS'.</li><li><strong>Madurez:</strong> Ya recibí premios. Ahora quiero que mi equipo los reciba.</li><li><strong>Visión:</strong> El código es legacy mañana. La cultura técnica perdura.</li></ul>",
+      "analogia": "Pasar de jugador estrella a entrenador: ya no metes los goles, pero entrenas al equipo que mete más que nunca.",
+      "codigo": null,
+      "frase": "Ya recibí palmadas en la espalda. Llegó el momento de conducir a personas que crean cosas maravillosas."
+    },
+    {
+      "id": 27,
+      "categoria": "liderazgo",
+      "dificultad": "senior",
+      "pregunta": "Cuéntame el proyecto más desafiante que hayas liderado. Usa el método STAR.",
+      "respuesta": "<p><strong>SITUACIÓN:</strong> 'En 2019, Ministerio de Trabajo necesitaba Certificado Único Laboral, consolidando 4 entidades.'</p><p><strong>TAREA:</strong> 'Diseñar integración con PIDE y garantizar demanda nacional.'</p><p><strong>ACCIÓN:</strong> 'Implementé colas, jerarquía de excepciones, firma digital, logs centralizados.'</p><p><strong>RESULTADO:</strong> 'Premio Innovación 2018, millones de peruanos lo usan.'</p>",
+      "analogia": "STAR es tu estructura para historias de impacto. Sin estructura divagamos, con STAR somos memorables.",
+      "codigo": null,
+      "frase": "Diseñar para el fallo, no para el éxito. Integrar sistemas es armar rompecabezas donde cada pieza puede cambiar."
+    },
+    {
+      "id": 28,
+      "categoria": "arquitectura",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo implementarías Contract-First con OpenAPI en microservicios bancarios?",
+      "respuesta": "<p>Contract-First = definir el contrato ANTES de codear:</p><ul><li><strong>1. Definir OpenAPI YAML</strong> con endpoints, schemas, errores.</li><li><strong>2. Generar código</strong> del contrato (interfaces, DTOs).</li><li><strong>3. Implementar</strong> las interfaces generadas.</li><li><strong>4. Validar</strong> que el código cumple el contrato.</li></ul><p><strong>Beneficios:</strong> Frontend y backend trabajan en paralelo, documentación siempre actualizada.</p>",
+      "analogia": "Es como construir una casa: primero los planos (contrato), luego la construcción (código). No al revés.",
+      "codigo": "# openapi.yaml\npaths:\n  /cuentas/{id}/saldo:\n    get:\n      operationId: getSaldo\n      parameters:\n        - name: id\n          in: path\n          required: true\n          schema:\n            type: string\n      responses:\n        '200':\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Saldo'\n\n# Genera interface que implementas\npublic interface CuentasApi {\n    Mono<Saldo> getSaldo(String id);\n}",
+      "frase": "Con Contract-First, frontend y backend pueden trabajar en paralelo. El contrato es el acuerdo."
+    },
+    {
+      "id": 29,
+      "categoria": "seguridad",
+      "dificultad": "senior",
+      "pregunta": "¿Cómo implementarías autenticación y autorización en microservicios con JWT?",
+      "respuesta": "<p>Flujo JWT en microservicios:</p><ul><li><strong>1. Login:</strong> Usuario se autentica, recibe JWT firmado.</li><li><strong>2. API Gateway:</strong> Valida firma del JWT, extrae claims.</li><li><strong>3. Propagación:</strong> Claims se propagan a microservicios downstream.</li><li><strong>4. Autorización:</strong> Cada servicio valida permisos según roles/scopes.</li></ul><p><strong>Seguridad:</strong> Tokens cortos (15min), refresh tokens, blacklist para revocación.</p>",
+      "analogia": "JWT es como tu pase del concierto: en la entrada validan que sea real, adentro cada zona valida si tu pase tiene acceso VIP.",
+      "codigo": "@Bean\nSecurityWebFilterChain security(ServerHttpSecurity http) {\n    return http\n        .oauth2ResourceServer(oauth -> oauth.jwt())\n        .authorizeExchange(ex -> ex\n            .pathMatchers(\"/admin/**\").hasRole(\"ADMIN\")\n            .pathMatchers(\"/api/**\").authenticated()\n            .anyExchange().permitAll())\n        .build();\n}\n\n// Extraer usuario del JWT\n@GetMapping(\"/mi-saldo\")\npublic Mono<Saldo> miSaldo(@AuthenticationPrincipal Jwt jwt) {\n    String userId = jwt.getSubject();\n    return saldoService.getSaldo(userId);\n}",
+      "frase": "JWT en microservicios: el gateway valida la firma, cada servicio valida los permisos. Defensa en profundidad."
+    },
+    {
+      "id": 30,
+      "categoria": "reactivo",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo manejas errores en programación reactiva? Explica los operadores principales.",
+      "respuesta": "<p>Operadores de error en Reactor:</p><ul><li><strong>onErrorReturn:</strong> Valor por defecto. 'Toma pastilla y sigue.'</li><li><strong>onErrorResume:</strong> Flujo alternativo. 'Ve a otro doctor (plan B).'</li><li><strong>onErrorMap:</strong> Transformar excepción. 'Te transfiero a especialista.'</li><li><strong>retry:</strong> Reintentar. 'Intenta de nuevo.'</li><li><strong>timeout:</strong> Límite de tiempo. 'Si no te atienden en 5s, vete.'</li></ul>",
+      "analogia": "Manejo de errores es como hospital: onErrorReturn=pastilla, onErrorResume=otro doctor, retry=vuelve a intentar, timeout=vete si no te atienden.",
+      "codigo": "public Mono<Saldo> getSaldoSeguro(String id) {\n    return cuentaRepo.findById(id)\n        .map(Cuenta::getSaldo)\n        .timeout(Duration.ofSeconds(5))\n        .retry(3)\n        .onErrorResume(TimeoutException.class, e -> \n            cacheService.getSaldoCache(id))\n        .onErrorReturn(Saldo.NO_DISPONIBLE)\n        .doOnError(e -> log.error(\"Error: {}\", e.getMessage()));\n}",
+      "frase": "En reactivo, el manejo de errores es first-class citizen. Cada operador tiene su propósito."
+    },
+    {
+      "id": 31,
+      "categoria": "arquitectura",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo aplicarías Domain-Driven Design (DDD) en un sistema bancario? Explica Bounded Contexts, Aggregates y Domain Events.",
+      "respuesta": "<p><strong>DDD organiza código por DOMINIOS de negocio:</strong></p><ul><li><strong>Bounded Context:</strong> Fronteras claras. 'Cuentas' es un contexto, 'Préstamos' es otro. Cada uno tiene su lenguaje.</li><li><strong>Aggregate:</strong> Grupo de entidades que se modifican juntas. Cuenta + Movimientos = un aggregate.</li><li><strong>Domain Events:</strong> 'TransferenciaRealizada' notifica a otros contextos sin acoplamiento.</li><li><strong>Anti-Corruption Layer:</strong> Traductor entre tu dominio y sistemas legacy.</li></ul>",
+      "analogia": "DDD es organizar el banco: Cuentas, Préstamos, Tarjetas son departamentos separados. Se comunican por memos (eventos), no entrando a la oficina del otro.",
+      "codigo": "// Aggregate Root\n@AggregateRoot\npublic class Cuenta {\n    private String id;\n    private List<Movimiento> movimientos;\n    private Saldo saldo;\n    \n    public DomainEvent debitar(BigDecimal monto) {\n        if (saldo.menor(monto)) throw new SaldoInsuficiente();\n        saldo = saldo.restar(monto);\n        return new CuentaDebitada(id, monto, Instant.now());\n    }\n}\n\n// Domain Event\npublic record CuentaDebitada(String cuentaId, BigDecimal monto, Instant when) {}",
+      "frase": "DDD no es sobre código, es sobre ENTENDER el negocio. Si no hablas el idioma del banco, tu código será confuso."
+    },
+    {
+      "id": 32,
+      "categoria": "cloud",
+      "dificultad": "lead",
+      "pregunta": "¿Qué es un Service Mesh (Istio/Linkerd) y cuándo lo necesitas en microservicios bancarios?",
+      "respuesta": "<p><strong>Service Mesh = infraestructura dedicada para comunicación entre servicios:</strong></p><ul><li><strong>Sidecar proxy:</strong> Cada pod tiene un Envoy que intercepta tráfico.</li><li><strong>mTLS automático:</strong> Todo cifrado sin cambiar código.</li><li><strong>Traffic Management:</strong> Canary, blue-green, circuit breaker a nivel infra.</li><li><strong>Observabilidad:</strong> Traces distribuidos automáticos.</li></ul><p><strong>¿Cuándo?</strong> +30 microservicios, necesitas zero-trust networking, equipos separados manejan servicios.</p>",
+      "analogia": "Service Mesh es como tener guardaespaldas para cada servicio: interceptan todo, verifican identidad, registran movimientos. Tú te enfocas en tu trabajo.",
+      "codigo": "# VirtualService para Canary release\napiVersion: networking.istio.io/v1beta1\nkind: VirtualService\nmetadata:\n  name: ms-transferencias\nspec:\n  hosts:\n    - ms-transferencias\n  http:\n    - match:\n        - headers:\n            x-canary:\n              exact: \"true\"\n      route:\n        - destination:\n            host: ms-transferencias\n            subset: v2\n    - route:\n        - destination:\n            host: ms-transferencias\n            subset: v1\n          weight: 90\n        - destination:\n            subset: v2\n          weight: 10",
+      "frase": "Service Mesh mueve complejidad del código a la infraestructura. Menos código = menos bugs en tu app."
+    },
+    {
+      "id": 33,
+      "categoria": "arquitectura",
+      "dificultad": "lead",
+      "pregunta": "System Design: Diseña el sistema de notificaciones push para Yape que envía millones de notificaciones diarias.",
+      "respuesta": "<p><strong>Componentes:</strong></p><ul><li><strong>API Gateway:</strong> Recibe eventos (transferencia, pago).</li><li><strong>Kafka:</strong> Cola de eventos, particiona por usuario para orden.</li><li><strong>Notification Workers:</strong> Consumers que procesan y formatean mensajes.</li><li><strong>Provider Abstraction:</strong> Firebase (Android), APNS (iOS), Email, SMS.</li><li><strong>Redis:</strong> Preferencias de usuario, device tokens, rate limiting.</li><li><strong>Dead Letter Queue:</strong> Reintentos para fallos.</li></ul><p><strong>Escala:</strong> 10 particiones, 10 consumers, batch processing de 100 mensajes.</p>",
+      "analogia": "Sistema de correos del banco: eventos llegan a central (Kafka), carteros (workers) los distribuyen según preferencia (push, email, SMS).",
+      "codigo": "@Service\npublic class NotificationWorker {\n    @KafkaListener(topics = \"eventos-notificacion\")\n    public Mono<Void> procesar(List<EventoNotificacion> batch) {\n        return Flux.fromIterable(batch)\n            .flatMap(this::obtenerPreferencias)\n            .flatMap(this::enviarPorCanal)\n            .onErrorContinue((e, o) -> dlq.enviar(o))\n            .then();\n    }\n    \n    private Mono<Void> enviarPorCanal(NotificacionEnriquecida n) {\n        return switch(n.canal()) {\n            case PUSH -> firebaseClient.send(n);\n            case EMAIL -> emailClient.send(n);\n            case SMS -> smsClient.send(n);\n        };\n    }\n}",
+      "frase": "Millones de notificaciones = Kafka + Workers escalables + Proveedores abstractos. Nunca llames a Firebase directamente."
+    },
+    {
+      "id": 34,
+      "categoria": "liderazgo",
+      "dificultad": "lead",
+      "pregunta": "Es viernes 5pm y hay un incidente P1 en producción. ¿Cómo lo manejas como Tech Lead?",
+      "respuesta": "<p><strong>Protocolo de Incidentes:</strong></p><ul><li><strong>1. Comunicar:</strong> Abrir canal de War Room (Slack/Teams), notificar stakeholders.</li><li><strong>2. Triaje:</strong> ¿Qué está fallando? ¿Impacto? ¿Desde cuándo?</li><li><strong>3. Mitigar:</strong> Rollback, feature flag off, escalar recursos. PARAR LA HEMORRAGIA.</li><li><strong>4. Diagnosticar:</strong> Logs, métricas, traces. ¿Qué cambió?</li><li><strong>5. Resolver:</strong> Fix + deploy o mantener mitigación hasta lunes.</li><li><strong>6. Post-mortem:</strong> Sin culpar. ¿Qué aprendimos? ¿Cómo prevenimos?</li></ul>",
+      "analogia": "Incidente es como incendio: primero evacuar (mitigar), luego apagar (fix), después investigar causa. No investigas mientras se quema.",
+      "codigo": "// Feature Flag para mitigar rápido\n@PostMapping(\"/transferencias\")\npublic Mono<Response> transferir(@RequestBody TransferenciaCmd cmd) {\n    if (!featureFlags.isEnabled(\"transferencias-interbancarias\")) {\n        return Mono.just(Response.servicioTemporalmenteNoDisponible());\n    }\n    return transferenciaService.ejecutar(cmd);\n}\n\n// Rollback inmediato\n$ kubectl rollout undo deployment/ms-transferencias",
+      "frase": "En un P1, primero MITIGA, después INVESTIGA. Usuarios no les importa el root cause, quieren que funcione."
+    },
+    {
+      "id": 35,
+      "categoria": "arquitectura",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo gestionas la deuda técnica en tu equipo? ¿Cuándo pagas y cuándo la aceptas?",
+      "respuesta": "<p><strong>Estrategia de Deuda Técnica:</strong></p><ul><li><strong>Inventariar:</strong> Documentar toda deuda en backlog técnico con impacto.</li><li><strong>Clasificar:</strong> Crítica (seguridad, estabilidad), Alta (velocidad dev), Media (mantenibilidad), Baja (nice-to-have).</li><li><strong>Regla 20%:</strong> 20% del sprint para pagar deuda técnica.</li><li><strong>Boy Scout:</strong> Deja el código mejor de lo que lo encontraste.</li></ul><p><strong>Pagar cuando:</strong> Afecta velocidad, causa incidentes, bloquea features. <strong>Aceptar cuando:</strong> Es temporal, no afecta usuarios, se pagará pronto.</p>",
+      "analogia": "Deuda técnica es como deuda de tarjeta: poquito está bien, acumular intereses te quiebra. El 20% del sprint es tu pago mensual.",
+      "codigo": null,
+      "frase": "Deuda técnica SIEMPRE se paga: o la pagas tú a tu ritmo, o la pagan tus usuarios con caídas y lentitud."
+    },
+    {
+      "id": 36,
+      "categoria": "data",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo diseñarías la estrategia de base de datos para microservicios? ¿Database per service o shared?",
+      "respuesta": "<p><strong>Database per Service (recomendado):</strong></p><ul><li><strong>Autonomía:</strong> Cada servicio controla su esquema, puede escalar independiente.</li><li><strong>Aislamiento:</strong> Fallo en una BD no afecta otras.</li><li><strong>Políglotas:</strong> PostgreSQL para transacciones, MongoDB para flexibilidad, Redis para cache.</li></ul><p><strong>Desafíos:</strong> Consistencia eventual, joins distribuidos, transacciones SAGA.</p><p><strong>Shared solo si:</strong> Equipo pequeño, dominio simple, migración gradual de monolito.</p>",
+      "analogia": "Cada departamento del banco tiene su archivo propio. Se comparten información por memos (APIs/eventos), no entrando al archivo del otro.",
+      "codigo": "// Servicio Cuentas - PostgreSQL\n@Repository\npublic interface CuentaRepository extends ReactiveCrudRepository<Cuenta, String> {}\n\n// Servicio Movimientos - MongoDB (alto volumen)\n@Repository  \npublic interface MovimientoRepository extends ReactiveMongoRepository<Movimiento, String> {\n    Flux<Movimiento> findByCuentaIdOrderByFechaDesc(String cuentaId);\n}\n\n// Servicio Notificaciones - Redis (efímero)\n@Repository\npublic class NotificacionRedisRepository {\n    public Mono<Boolean> marcarLeida(String notifId) {\n        return redisTemplate.opsForValue().set(notifId, \"leida\", Duration.ofDays(7));\n    }\n}",
+      "frase": "Database per service es el camino. Sí, es más complejo, pero la alternativa es un monolito distribuido."
+    },
+    {
+      "id": 37,
+      "categoria": "resiliencia",
+      "dificultad": "lead",
+      "pregunta": "¿Qué es Chaos Engineering y cómo lo aplicarías en sistemas bancarios?",
+      "respuesta": "<p><strong>Chaos Engineering = romper cosas a propósito para encontrar debilidades:</strong></p><ul><li><strong>1. Hipótesis:</strong> 'Si cae el servicio de saldos, transferencias debe mostrar fallback.'</li><li><strong>2. Experimento:</strong> Matar pods de saldos en ambiente controlado.</li><li><strong>3. Medir:</strong> ¿Circuit breaker se abrió? ¿Latencia? ¿Errores usuarios?</li><li><strong>4. Aprender:</strong> Documentar y mejorar.</li></ul><p><strong>Herramientas:</strong> Chaos Monkey, Litmus, Gremlin. <strong>En banca:</strong> Primero en staging, nunca en horario pico.</p>",
+      "analogia": "Es simulacro de incendio: mejor descubrir que la puerta de emergencia está trabada en simulacro que en incendio real.",
+      "codigo": "# Chaos experiment con Litmus\napiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine\nmetadata:\n  name: saldos-chaos\nspec:\n  appinfo:\n    appns: banking\n    applabel: app=ms-saldos\n  chaosServiceAccount: litmus-admin\n  experiments:\n    - name: pod-delete\n      spec:\n        components:\n          env:\n            - name: TOTAL_CHAOS_DURATION\n              value: '60'\n            - name: CHAOS_INTERVAL\n              value: '10'",
+      "frase": "Chaos Engineering en banca no es irresponsable, es profesional. Mejor que descubras tú las debilidades a que las descubran tus usuarios."
+    },
+    {
+      "id": 38,
+      "categoria": "observabilidad",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo implementarías distributed tracing con OpenTelemetry en microservicios?",
+      "respuesta": "<p><strong>OpenTelemetry unifica traces, métricas y logs:</strong></p><ul><li><strong>Instrumentación:</strong> SDK automático intercepta HTTP, BD, Kafka.</li><li><strong>Propagación:</strong> Trace ID se pasa en headers (W3C Trace Context).</li><li><strong>Exportación:</strong> Envía a Jaeger, Zipkin, Tempo, X-Ray.</li><li><strong>Sampling:</strong> 10% normal, 100% en errores.</li></ul><p><strong>Beneficio:</strong> Ver TODO el flujo de un request: API Gateway → BFF → Servicio → BD → Kafka.</p>",
+      "analogia": "OpenTelemetry es GPS del request: sabes exactamente por dónde pasó, cuánto demoró en cada parada, y dónde se atascó.",
+      "codigo": "// build.gradle\nimplementation 'io.opentelemetry:opentelemetry-api'\nimplementation 'io.opentelemetry.instrumentation:opentelemetry-spring-webflux'\n\n// application.yml\notel:\n  traces:\n    exporter: jaeger\n  exporter:\n    jaeger:\n      endpoint: http://jaeger:14250\n  resource:\n    attributes:\n      service.name: ms-transferencias\n      deployment.environment: production\n\n// Span personalizado\n@WithSpan(\"validar-saldo-suficiente\")\npublic Mono<Boolean> validarSaldo(String cuentaId, BigDecimal monto) {\n    return saldoService.getSaldo(cuentaId)\n        .map(s -> s.compareTo(monto) >= 0);\n}",
+      "frase": "Sin distributed tracing, debuggear microservicios es imposible. OpenTelemetry es el estándar, no inventes."
+    },
+    {
+      "id": 39,
+      "categoria": "seguridad",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo implementarías Rate Limiting y protección contra DDoS en APIs bancarias?",
+      "respuesta": "<p><strong>Capas de protección:</strong></p><ul><li><strong>1. CDN/WAF:</strong> Cloudflare, AWS Shield. Primera línea contra DDoS.</li><li><strong>2. API Gateway:</strong> Rate limit por IP, usuario, API key.</li><li><strong>3. Aplicación:</strong> Resilience4j RateLimiter por operación crítica.</li></ul><p><strong>Estrategia:</strong></p><ul><li>Consulta saldo: 100/min por usuario.</li><li>Transferencias: 10/min por usuario.</li><li>Login: 5 intentos, luego bloqueo 15 min.</li></ul>",
+      "analogia": "Rate limiting es el guardia del banco: si alguien entra y sale 100 veces en un minuto, algo raro pasa. Lo paras.",
+      "codigo": "// Redis-based Rate Limiter\n@RateLimiter(name = \"transferencias\")\npublic Mono<TransferenciaResponse> transferir(TransferenciaCmd cmd) {\n    return transferenciaService.ejecutar(cmd);\n}\n\n# application.yml\nresilience4j:\n  ratelimiter:\n    instances:\n      transferencias:\n        limitForPeriod: 10\n        limitRefreshPeriod: 1m\n        timeoutDuration: 0\n\n// Custom con Redis para distribuido\npublic Mono<Boolean> permitir(String userId, String operacion) {\n    String key = \"rate:\" + operacion + \":\" + userId;\n    return redisTemplate.opsForValue()\n        .increment(key)\n        .flatMap(count -> {\n            if (count == 1) redisTemplate.expire(key, Duration.ofMinutes(1));\n            return Mono.just(count <= 10);\n        });\n}",
+      "frase": "Sin rate limiting, un bot puede vaciar cuentas. En banca, es obligatorio, no opcional."
+    },
+    {
+      "id": 40,
+      "categoria": "liderazgo",
+      "dificultad": "lead",
+      "pregunta": "Tu equipo tiene 2 seniors que no se llevan bien y afectan la dinámica. ¿Cómo lo resuelves?",
+      "respuesta": "<p><strong>Proceso de mediación:</strong></p><ul><li><strong>1. Observar:</strong> ¿Es personal o profesional? ¿Afecta entregas?</li><li><strong>2. Individual:</strong> Hablar con cada uno por separado. Escuchar sin juzgar.</li><li><strong>3. Encontrar raíz:</strong> ¿Territorio? ¿Ego? ¿Comunicación?</li><li><strong>4. Mediación:</strong> Reunión conjunta enfocada en objetivos del equipo.</li><li><strong>5. Acuerdos:</strong> Reglas claras de colaboración.</li><li><strong>6. Seguimiento:</strong> Check-ins periódicos.</li></ul><p><strong>Si persiste:</strong> Escalar a HR, considerar reorganización.</p>",
+      "analogia": "Conflicto entre seniors es como dos pilotos peleando en cabina. Primero aterrizar el avión (entregas), luego resolver el conflicto.",
+      "codigo": null,
+      "frase": "Conflictos no resueltos son cáncer de equipos. No ignores señales, actúa rápido pero con tacto."
+    },
+    {
+      "id": 41,
+      "categoria": "arquitectura",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo migrarías un monolito bancario a microservicios sin detener operaciones?",
+      "respuesta": "<p><strong>Estrategia Strangler Fig:</strong></p><ul><li><strong>1. Identificar bounded contexts:</strong> Mapear dominios del monolito.</li><li><strong>2. Empezar por los bordes:</strong> Features nuevas como microservicios.</li><li><strong>3. Extraer gradualmente:</strong> Un dominio a la vez (ej: Notificaciones).</li><li><strong>4. Anti-Corruption Layer:</strong> Traductor entre micro y mono.</li><li><strong>5. Database splitting:</strong> Primero replicar, luego separar.</li></ul><p><strong>Regla:</strong> Nunca big bang. Migración de 2-3 años es normal en banca.</p>",
+      "analogia": "Strangler Fig es una planta que crece alrededor de un árbol hasta reemplazarlo. Los microservicios crecen alrededor del monolito.",
+      "codigo": "// Anti-Corruption Layer\n@Service\npublic class CuentaAntiCorruptionLayer {\n    private final MonolitoClient monolito;\n    private final NuevoCuentaService nuevoServicio;\n    private final FeatureFlags flags;\n    \n    public Mono<Cuenta> getCuenta(String id) {\n        if (flags.isEnabled(\"usar-nuevo-servicio-cuentas\")) {\n            return nuevoServicio.getCuenta(id);\n        }\n        return monolito.getCuenta(id)\n            .map(this::traducirANuevoModelo);\n    }\n}",
+      "frase": "Migrar monolito es maratón, no sprint. Paciencia, feature flags, y nunca apagar el monolito hasta que esté vacío."
+    },
+    {
+      "id": 42,
+      "categoria": "data",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo implementarías Outbox Pattern para garantizar consistencia entre base de datos y Kafka?",
+      "respuesta": "<p><strong>Problema:</strong> Si guardas en BD y luego publicas a Kafka, puede fallar después del commit.</p><p><strong>Outbox Pattern:</strong></p><ul><li><strong>1.</strong> Transacción atómica: INSERT en tabla + INSERT en outbox_events.</li><li><strong>2.</strong> Debezium/poller lee outbox_events.</li><li><strong>3.</strong> Publica a Kafka.</li><li><strong>4.</strong> Marca como procesado.</li></ul><p><strong>Beneficio:</strong> At-least-once delivery garantizado. Consumers deben ser idempotentes.</p>",
+      "analogia": "Outbox es como dejar carta en bandeja de salida: la transacción la deja ahí, el cartero (Debezium) la recoge y envía.",
+      "codigo": "// Transacción atómica\n@Transactional\npublic Mono<Transferencia> ejecutar(TransferenciaCmd cmd) {\n    return cuentaRepo.debitar(cmd.origen(), cmd.monto())\n        .then(cuentaRepo.acreditar(cmd.destino(), cmd.monto()))\n        .then(transferenciaRepo.guardar(cmd))\n        .then(outboxRepo.save(OutboxEvent.builder()\n            .aggregateType(\"Transferencia\")\n            .aggregateId(cmd.id())\n            .type(\"TransferenciaRealizada\")\n            .payload(toJson(cmd))\n            .build()));\n}\n\n// Debezium CDC captura cambios en outbox y publica a Kafka\n// Consumer debe ser idempotente (usar idempotency key)",
+      "frase": "Sin Outbox, pierdes eventos. Con Outbox, puede duplicar. Prefiero duplicados que eventos perdidos (idempotencia)."
+    },
+    {
+      "id": 43,
+      "categoria": "reactivo",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo implementarías Server-Sent Events (SSE) para notificaciones en tiempo real en banca?",
+      "respuesta": "<p><strong>SSE vs WebSocket:</strong></p><ul><li><strong>SSE:</strong> Unidireccional servidor→cliente. Más simple, reconexión automática.</li><li><strong>WebSocket:</strong> Bidireccional. Más complejo pero más flexible.</li></ul><p><strong>En banca:</strong> SSE para notificaciones push (transferencias recibidas, alertas). WebSocket solo si necesitas chat o bidireccional.</p><p><strong>Implementación:</strong> Flux que emite eventos, MediaType TEXT_EVENT_STREAM.</p>",
+      "analogia": "SSE es radio: el banco transmite, tú escuchas. WebSocket es teléfono: ambos hablan. Para notificaciones, radio basta.",
+      "codigo": "@GetMapping(value = \"/notificaciones/stream\", produces = MediaType.TEXT_EVENT_STREAM_VALUE)\npublic Flux<ServerSentEvent<NotificacionDTO>> streamNotificaciones(\n        @AuthenticationPrincipal Jwt jwt) {\n    String userId = jwt.getSubject();\n    \n    return Flux.merge(\n        // Notificaciones existentes\n        notificacionService.getPendientes(userId),\n        // Nuevas notificaciones en tiempo real\n        notificacionSink.asFlux()\n            .filter(n -> n.getUserId().equals(userId))\n    )\n    .map(n -> ServerSentEvent.<NotificacionDTO>builder()\n        .id(n.getId())\n        .event(n.getTipo())\n        .data(n)\n        .build())\n    .doOnCancel(() -> log.info(\"SSE cerrado: {}\", userId));\n}",
+      "frase": "SSE es subestimado. Para notificaciones unidireccionales es más simple y robusto que WebSocket."
+    },
+    {
+      "id": 44,
+      "categoria": "liderazgo",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo mides la productividad de tu equipo de desarrollo sin caer en métricas tóxicas?",
+      "respuesta": "<p><strong>Métricas a EVITAR:</strong> Lines of code, commits/día, horas trabajadas.</p><p><strong>Métricas DORA (recomendadas):</strong></p><ul><li><strong>Deployment Frequency:</strong> ¿Cada cuánto desplegamos? (meta: diario)</li><li><strong>Lead Time:</strong> Commit → producción. (meta: <1 día)</li><li><strong>Change Failure Rate:</strong> % deploys que causan incidentes. (meta: <15%)</li><li><strong>MTTR:</strong> Tiempo para recuperarse de incidente. (meta: <1 hora)</li></ul><p><strong>Complementar con:</strong> Satisfacción del equipo, deuda técnica trending, cobertura tests.</p>",
+      "analogia": "Métricas tóxicas son como medir chef por platos/hora: produce basura rápido. DORA mide si los platos llegan bien al cliente.",
+      "codigo": null,
+      "frase": "Si mides líneas de código, obtendrás código inflado. Mide IMPACTO: qué tan rápido entregamos VALOR sin romper cosas."
+    },
+    {
+      "id": 45,
+      "categoria": "arquitectura",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo implementarías idempotencia en APIs de transferencias para evitar cobros duplicados?",
+      "respuesta": "<p><strong>Idempotencia = misma request, mismo resultado, sin efectos duplicados.</strong></p><p><strong>Implementación:</strong></p><ul><li><strong>1. Idempotency Key:</strong> Cliente envía UUID único en header.</li><li><strong>2. Almacenar:</strong> Redis con TTL (24h) guarda key + respuesta.</li><li><strong>3. Verificar:</strong> Si key existe, retorna respuesta guardada.</li><li><strong>4. Procesar:</strong> Si no existe, procesa y guarda.</li></ul><p><strong>Casos de uso:</strong> Transferencias, pagos, cualquier operación no-idempotente.</p>",
+      "analogia": "Es como recibo de pago: si ya pagaste (key existe), te muestro el recibo anterior. No te cobro dos veces.",
+      "codigo": "@PostMapping(\"/transferencias\")\npublic Mono<TransferenciaResponse> transferir(\n        @RequestHeader(\"Idempotency-Key\") String idempotencyKey,\n        @RequestBody TransferenciaCmd cmd) {\n    \n    return idempotencyService.get(idempotencyKey)\n        .switchIfEmpty(\n            transferenciaService.ejecutar(cmd)\n                .flatMap(response -> \n                    idempotencyService.save(idempotencyKey, response, Duration.ofHours(24))\n                        .thenReturn(response))\n        );\n}\n\n// IdempotencyService con Redis\npublic Mono<TransferenciaResponse> get(String key) {\n    return redisTemplate.opsForValue()\n        .get(\"idempotency:\" + key)\n        .map(json -> fromJson(json, TransferenciaResponse.class));\n}",
+      "frase": "En banca, transferencia duplicada es pérdida de dinero. Idempotencia no es opcional, es OBLIGATORIA."
+    },
+    {
+      "id": 46,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es ACID en bases de datos? Explícalo como si fuera una transferencia en Yape.",
+      "respuesta": "<p><strong>ACID = las 4 garantías de una transacción de BD:</strong></p><ul><li><strong>A - Atomicity (Atomicidad):</strong> TODO O NADA. Si yapeas S/100, o se descuenta Y llega, o ninguno. No puede quedar a medias.</li><li><strong>C - Consistency (Consistencia):</strong> REGLAS SIEMPRE SE CUMPLEN. Si tienes S/50, no puedes yapear S/100. La BD no permite estados inválidos.</li><li><strong>I - Isolation (Aislamiento):</strong> CADA UNO EN SU COLA. Si tú y tu hermano yapean al mismo tiempo, cada transacción es independiente.</li><li><strong>D - Durability (Durabilidad):</strong> LO QUE SE GUARDÓ, SE GUARDÓ. Si el banco dice 'transferencia exitosa', aunque se caiga el servidor, tu plata está segura.</li></ul>",
+      "analogia": "ACID es el contrato del banco: TODO o NADA (A), respeta tus reglas (C), cada cliente en su ventanilla (I), lo firmado es ley (D).",
+      "codigo": "@Transactional // Spring garantiza ACID\npublic Mono<Void> transferir(String origen, String destino, BigDecimal monto) {\n    return cuentaRepo.debitar(origen, monto)    // Si esto falla...\n        .then(cuentaRepo.acreditar(destino, monto)) // ...esto NO se ejecuta\n        .then();  // TODO O NADA (Atomicity)\n}",
+      "frase": "Sin ACID, tu yape podría descontar pero no llegar. ACID es la promesa de que eso NUNCA pase."
+    },
+    {
+      "id": 47,
+      "categoria": "patrones",
+      "dificultad": "lead",
+      "pregunta": "Explica los patrones de microservicios por categoría: Comunicación, Datos, Resiliencia y Observabilidad.",
+      "respuesta": "<p><strong>🔗 COMUNICACIÓN (cómo hablan entre sí):</strong></p><ul><li><strong>API Gateway:</strong> Portero único de entrada.</li><li><strong>Service Discovery:</strong> Páginas amarillas de servicios.</li><li><strong>Sidecar:</strong> Asistente que acompaña a cada servicio.</li></ul><p><strong>💾 DATOS (cómo manejan info):</strong></p><ul><li><strong>Database per Service:</strong> Cada uno su BD.</li><li><strong>CQRS:</strong> Una BD para leer, otra para escribir.</li><li><strong>Event Sourcing:</strong> Guardar TODO lo que pasó.</li><li><strong>Saga:</strong> CTRL+Z distribuido.</li></ul><p><strong>🛡️ RESILIENCIA (cómo sobreviven):</strong></p><ul><li><strong>Circuit Breaker:</strong> Fusible que corta.</li><li><strong>Retry:</strong> Volver a intentar.</li><li><strong>Bulkhead:</strong> Compartimentos del barco.</li><li><strong>Timeout:</strong> No esperar forever.</li></ul><p><strong>👁️ OBSERVABILIDAD (cómo los vigilas):</strong></p><ul><li><strong>Log Aggregation:</strong> Todos los logs en un lugar.</li><li><strong>Distributed Tracing:</strong> GPS del request.</li><li><strong>Health Check:</strong> ¿Estás vivo?</li></ul>",
+      "analogia": "Microservicios son como departamentos de empresa: COMUNICACIÓN es cómo se mandan memos, DATOS es cómo guardan archivos, RESILIENCIA es plan de emergencia, OBSERVABILIDAD es las cámaras de seguridad.",
+      "codigo": "// Ejemplo combinando patrones\n@CircuitBreaker(name = \"pagos\")  // RESILIENCIA\n@Retry(name = \"pagos\")           // RESILIENCIA  \npublic Mono<PagoResponse> pagar(PagoCmd cmd) {\n    return webClient.post()      // COMUNICACIÓN (via API Gateway)\n        .bodyValue(cmd)\n        .retrieve()\n        .bodyToMono(PagoResponse.class)\n        .doOnSuccess(r -> log.info(\"Pago OK\"))  // OBSERVABILIDAD\n        .doOnError(e -> log.error(\"Pago FAIL\")); // OBSERVABILIDAD\n}",
+      "frase": "No memorices patrones, entiende QUÉ PROBLEMA resuelven. Cada categoría ataca un dolor específico de microservicios."
+    },
+    {
+      "id": 48,
+      "categoria": "patrones",
+      "dificultad": "senior",
+      "pregunta": "¿Cuáles son los 3 tipos de patrones de diseño GoF (Gang of Four)? Dame ejemplos en Java.",
+      "respuesta": "<p><strong>Los 23 patrones GoF se dividen en 3 familias:</strong></p><p><strong>🏗️ CREACIONALES (cómo CREAR objetos):</strong></p><ul><li><strong>Singleton:</strong> Solo UNO en todo el sistema (Config, Logger).</li><li><strong>Factory:</strong> Fábrica que decide qué objeto crear.</li><li><strong>Builder:</strong> Construir paso a paso (objetos complejos).</li></ul><p><strong>🧱 ESTRUCTURALES (cómo ORGANIZAR clases):</strong></p><ul><li><strong>Adapter:</strong> Enchufe adaptador entre incompatibles.</li><li><strong>Decorator:</strong> Agregar funcionalidad sin modificar.</li><li><strong>Facade:</strong> Fachada simple para sistema complejo.</li></ul><p><strong>🎭 COMPORTAMIENTO (cómo INTERACTÚAN):</strong></p><ul><li><strong>Strategy:</strong> Cambiar algoritmo en runtime.</li><li><strong>Observer:</strong> Notificar cuando algo cambia.</li><li><strong>Template Method:</strong> Esqueleto con pasos personalizables.</li></ul>",
+      "analogia": "GoF son recetas de cocina probadas: CREACIONALES = cómo preparar ingredientes, ESTRUCTURALES = cómo armar el plato, COMPORTAMIENTO = cómo servir y presentar.",
+      "codigo": "// CREACIONAL - Builder\nTransferencia t = Transferencia.builder()\n    .origen(\"123\").destino(\"456\").monto(100).build();\n\n// ESTRUCTURAL - Adapter\npublic class LegacyBankAdapter implements ModernBankPort {\n    private LegacyBank legacy;\n    public Mono<Saldo> getSaldo(String id) {\n        return Mono.fromCallable(() -> legacy.consultarSaldo(id));\n    }\n}\n\n// COMPORTAMIENTO - Strategy\npublic interface ComisionStrategy {\n    BigDecimal calcular(BigDecimal monto);\n}\n// Cambias estrategia sin tocar código",
+      "frase": "No uses patrones por usarlos. Primero el PROBLEMA, luego buscas si hay patrón que lo resuelva."
+    },
+    {
+      "id": 49,
+      "categoria": "reactivo",
+      "dificultad": "senior",
+      "pregunta": "¿Cuál es la diferencia entre operadores INTERMEDIOS y TERMINALES en programación reactiva?",
+      "respuesta": "<p><strong>🔄 INTERMEDIOS (transforman el flujo, NO ejecutan):</strong></p><ul><li><strong>map():</strong> Transforma cada elemento.</li><li><strong>filter():</strong> Filtra elementos.</li><li><strong>flatMap():</strong> Transforma y aplana.</li><li><strong>take(n):</strong> Toma solo n elementos.</li><li><strong>distinct():</strong> Elimina duplicados.</li><li><strong>doOnNext():</strong> Side effect sin modificar.</li></ul><p><strong>🏁 TERMINALES (disparan la ejecución):</strong></p><ul><li><strong>subscribe():</strong> ¡ARRANCA!</li><li><strong>block():</strong> Espera resultado (¡evitar!).</li><li><strong>collectList():</strong> Junta todo en lista.</li><li><strong>count():</strong> Cuenta elementos.</li><li><strong>then():</strong> Cuando termine, haz esto.</li></ul><p><strong>REGLA DE ORO:</strong> Sin operador terminal, NADA se ejecuta. Es como armar receta pero nunca cocinar.</p>",
+      "analogia": "Intermedios son INSTRUCCIONES de la receta (picar, mezclar, sazonar). Terminales son COCINAR (meter al horno). Sin cocinar, solo tienes papel con instrucciones.",
+      "codigo": "// NADA se ejecuta (solo intermedios)\nFlux.just(1, 2, 3)\n    .map(n -> n * 2)      // Intermedio\n    .filter(n -> n > 2);   // Intermedio - ¡RECETA SIN COCINAR!\n\n// AHORA SÍ se ejecuta (terminal)\nFlux.just(1, 2, 3)\n    .map(n -> n * 2)      // Intermedio\n    .filter(n -> n > 2)    // Intermedio  \n    .subscribe(System.out::println);  // TERMINAL = ¡ARRANCA!",
+      "frase": "Sin subscribe(), tu código reactivo es letra muerta. Es el botón de PLAY."
+    },
+    {
+      "id": 50,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es programación funcional y cuáles son sus principios? Explícalo con ejemplos de Yape.",
+      "respuesta": "<p><strong>Programación Funcional = código como FUNCIONES MATEMÁTICAS:</strong></p><p><strong>📌 PRINCIPIOS:</strong></p><ul><li><strong>Inmutabilidad:</strong> Datos NO se modifican, se crean nuevos. Tu saldo no se 'modifica', se crea nuevo estado.</li><li><strong>Funciones Puras:</strong> Mismo input = mismo output. calcularComision(100) SIEMPRE = 2.</li><li><strong>Sin Side Effects:</strong> Función no modifica nada externo.</li><li><strong>First-Class Functions:</strong> Funciones son valores, se pasan como parámetros.</li><li><strong>Higher-Order Functions:</strong> Funciones que reciben/retornan funciones (map, filter, reduce).</li></ul><p><strong>BENEFICIOS:</strong> Código predecible, fácil de testear, paralelizable.</p>",
+      "analogia": "Funcional es cocina de RECETAS EXACTAS: mismos ingredientes = mismo plato. No hay 'a ojo'. Imperativo es cocina de abuelita: 'échale hasta que sepa bien'.",
+      "codigo": "// IMPERATIVO (mutable, side effects)\nList<Movimiento> filtrados = new ArrayList<>();\nfor (Movimiento m : movimientos) {\n    if (m.getMonto() > 100) {\n        filtrados.add(m);  // Muta lista externa\n    }\n}\n\n// FUNCIONAL (inmutable, puro)\nList<Movimiento> filtrados = movimientos.stream()\n    .filter(m -> m.getMonto() > 100)  // Función pura\n    .collect(Collectors.toList());     // Nueva lista, no muta",
+      "frase": "Funcional no es moda, es PREDICTIBILIDAD. En banca, necesitas saber que 2+2 siempre será 4."
+    },
+    {
+      "id": 51,
+      "categoria": "azure",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es Azure Data Factory y cuándo lo usarías en un proyecto bancario?",
+      "respuesta": "<p><strong>Azure Data Factory (ADF) = ORQUESTADOR de movimiento de datos:</strong></p><ul><li><strong>ETL/ELT:</strong> Extrae de BD, archivos, APIs → Transforma → Carga a destino.</li><li><strong>Pipelines:</strong> Flujos visuales de datos con actividades.</li><li><strong>Conectores:</strong> +90 fuentes (SQL, Oracle, SAP, S3, APIs REST).</li><li><strong>Triggers:</strong> Por horario, evento, o tumbling window.</li></ul><p><strong>EN BANCA:</strong></p><ul><li>Migración nocturna de transacciones a Data Lake.</li><li>Consolidación de datos de múltiples cores bancarios.</li><li>Alimentar dashboards de riesgo con data de producción.</li></ul>",
+      "analogia": "ADF es el CAMIÓN DE MUDANZA de datos: recoge cajas (datos) de varias casas (fuentes), las reorganiza en el camino (transforma), y las deja en la nueva casa (destino).",
+      "codigo": "// Pipeline ADF (JSON simplificado)\n{\n  \"name\": \"MigracionTransaccionesDiaria\",\n  \"activities\": [\n    {\n      \"name\": \"CopiarDesdeOracle\",\n      \"type\": \"Copy\",\n      \"source\": { \"type\": \"OracleSource\", \"query\": \"SELECT * FROM TXN WHERE fecha = @today\" },\n      \"sink\": { \"type\": \"AzureBlobSink\", \"path\": \"raw/transacciones/\" }\n    },\n    {\n      \"name\": \"TransformarConDataflow\",\n      \"type\": \"DataFlow\",\n      \"dependsOn\": [\"CopiarDesdeOracle\"]\n    }\n  ],\n  \"trigger\": { \"type\": \"Schedule\", \"recurrence\": \"0 2 * * *\" }\n}",
+      "frase": "ADF no es para tiempo real, es para BATCH. Si necesitas mover TB de datos cada noche, ADF es tu amigo."
+    },
+    {
+      "id": 52,
+      "categoria": "azure",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es Azure Functions y cuándo lo usarías vs un microservicio tradicional?",
+      "respuesta": "<p><strong>Azure Functions = SERVERLESS, código que corre sin servidor:</strong></p><ul><li><strong>Event-Driven:</strong> Se ejecuta cuando pasa algo (HTTP, Queue, Timer, Blob).</li><li><strong>Pay-per-execution:</strong> Solo pagas cuando corre.</li><li><strong>Auto-scale:</strong> Escala de 0 a miles automáticamente.</li><li><strong>Cold Start:</strong> Primera ejecución puede demorar (desventaja).</li></ul><p><strong>USAR FUNCTIONS:</strong> Tareas cortas, event-driven, tráfico impredecible.</p><p><strong>USAR MICROSERVICIO:</strong> Procesos largos, estado, tráfico constante, latencia crítica.</p>",
+      "analogia": "Functions es TAXI: lo llamas cuando necesitas, pagas el viaje, se va. Microservicio es AUTO PROPIO: siempre disponible pero pagas parking aunque no lo uses.",
+      "codigo": "// Azure Function - Trigger HTTP\n@FunctionName(\"ValidarTransferencia\")\npublic HttpResponseMessage validar(\n    @HttpTrigger(name = \"req\", methods = {HttpMethod.POST}) HttpRequestMessage<TransferenciaDTO> request,\n    ExecutionContext context) {\n    \n    TransferenciaDTO tx = request.getBody();\n    boolean valida = tx.getMonto().compareTo(BigDecimal.ZERO) > 0;\n    \n    return request.createResponseBuilder(valida ? HttpStatus.OK : HttpStatus.BAD_REQUEST)\n        .body(valida ? \"OK\" : \"Monto inválido\")\n        .build();\n}\n\n// Trigger por Cola (procesar eventos)\n@FunctionName(\"ProcesarNotificacion\")\npublic void procesar(\n    @QueueTrigger(name = \"msg\", queueName = \"notificaciones\") String mensaje) {\n    // Se ejecuta cada vez que llega mensaje a la cola\n}",
+      "frase": "Functions para picos impredecibles y eventos. Microservicio para carga constante. No todo debe ser serverless."
+    },
+    {
+      "id": 53,
+      "categoria": "azure",
+      "dificultad": "lead",
+      "pregunta": "¿Qué es ACR (Azure Container Registry) y cómo se integra con AKS?",
+      "respuesta": "<p><strong>ACR = tu ALMACÉN PRIVADO de imágenes Docker:</strong></p><ul><li><strong>Registry privado:</strong> Como Docker Hub pero solo para tu empresa.</li><li><strong>Geo-replicación:</strong> Imágenes cerca de donde despliegas.</li><li><strong>Escaneo de vulnerabilidades:</strong> Detecta CVEs en tus imágenes.</li><li><strong>Integración nativa AKS:</strong> AKS jala imágenes sin config extra.</li></ul><p><strong>FLUJO CI/CD:</strong></p><ol><li>Build imagen en pipeline.</li><li>Push a ACR con tag (v1.2.3).</li><li>AKS hace pull de ACR.</li><li>Kubernetes despliega pods.</li></ol>",
+      "analogia": "ACR es tu BODEGA PRIVADA de contenedores. AKS es el PUERTO que descarga los contenedores y los pone a trabajar.",
+      "codigo": "# Build y push a ACR\naz acr build --registry miregistro --image ms-transferencias:v1.2.3 .\n\n# Kubernetes deployment jalando de ACR\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: ms-transferencias\nspec:\n  template:\n    spec:\n      containers:\n        - name: app\n          image: miregistro.azurecr.io/ms-transferencias:v1.2.3\n          # AKS ya tiene permisos a ACR (managed identity)",
+      "frase": "ACR + AKS es el combo nativo de Azure para contenedores. Integración sin dolor de cabeza."
+    },
+    {
+      "id": 54,
+      "categoria": "azure",
+      "dificultad": "senior",
+      "pregunta": "¿Cuál es la diferencia entre Web App for Containers y AKS? ¿Cuándo usar cada uno?",
+      "respuesta": "<p><strong>🌐 WEB APP FOR CONTAINERS (App Service):</strong></p><ul><li><strong>PaaS simple:</strong> Subes contenedor, Azure maneja todo.</li><li><strong>Sin orquestación:</strong> Un contenedor por app.</li><li><strong>Auto-scale básico:</strong> Por CPU/memoria.</li><li><strong>Ideal para:</strong> APIs simples, equipos pequeños, MVPs.</li></ul><p><strong>☸️ AKS (Azure Kubernetes Service):</strong></p><ul><li><strong>Orquestación completa:</strong> Kubernetes managed.</li><li><strong>Multi-contenedor:</strong> Pods, sidecars, service mesh.</li><li><strong>Control total:</strong> Networking, storage, scaling avanzado.</li><li><strong>Ideal para:</strong> Microservicios complejos, equipos grandes, producción enterprise.</li></ul>",
+      "analogia": "Web App es DEPARTAMENTO AMOBLADO: llegas y vives. AKS es TERRENO + MATERIALES: construyes como quieras pero tú armas todo.",
+      "codigo": "# Web App for Containers - Simple\naz webapp create --name mi-api \\\n  --resource-group mi-rg \\\n  --plan mi-plan \\\n  --deployment-container-image-name miregistro.azurecr.io/mi-api:latest\n\n# AKS - Más control pero más config\nkubectl apply -f deployment.yaml\nkubectl apply -f service.yaml\nkubectl apply -f ingress.yaml\nkubectl apply -f hpa.yaml\n# ... y más manifiestos",
+      "frase": "¿Tienes 1-5 servicios simples? Web App. ¿Tienes 20+ microservicios con service mesh? AKS."
+    },
+    {
+      "id": 55,
+      "categoria": "azure",
+      "dificultad": "lead",
+      "pregunta": "¿Qué es Azure Key Vault y cómo lo usarías para secretos en microservicios?",
+      "respuesta": "<p><strong>Key Vault = CAJA FUERTE de Azure para secretos:</strong></p><ul><li><strong>Secrets:</strong> Passwords, connection strings, API keys.</li><li><strong>Keys:</strong> Llaves criptográficas (encrypt/decrypt).</li><li><strong>Certificates:</strong> SSL/TLS certificates.</li><li><strong>Access Policies:</strong> Quién puede leer qué.</li><li><strong>Audit Logs:</strong> Quién accedió a qué secreto.</li></ul><p><strong>INTEGRACIÓN:</strong></p><ul><li><strong>Managed Identity:</strong> App se autentica sin credenciales.</li><li><strong>AKS + CSI Driver:</strong> Secretos se montan como archivos.</li><li><strong>Spring Boot:</strong> @Value lee directo de Key Vault.</li></ul>",
+      "analogia": "Key Vault es la BÓVEDA del banco donde guardas las llaves de las otras bóvedas. Nadie tiene la llave pegada en la puerta.",
+      "codigo": "// Spring Boot con Azure Key Vault\n// application.yml\nazure:\n  keyvault:\n    uri: https://mi-vault.vault.azure.net/\n\n// Uso en código - el secreto se jala automático\n@Value(\"${db-password}\")\nprivate String dbPassword;\n\n// AKS con CSI Driver\napiVersion: v1\nkind: Pod\nspec:\n  containers:\n    - name: app\n      volumeMounts:\n        - name: secrets\n          mountPath: \"/mnt/secrets\"\n          readOnly: true\n  volumes:\n    - name: secrets\n      csi:\n        driver: secrets-store.csi.k8s.io\n        volumeAttributes:\n          secretProviderClass: azure-keyvault",
+      "frase": "Secreto en código = despido. Secreto en Key Vault = práctica profesional. En banca, es requisito regulatorio."
+    },
+    {
+      "id": 56,
+      "categoria": "patrones",
+      "dificultad": "lead",
+      "pregunta": "Explica el patrón Saga con sus dos variantes: Orquestada y Coreografiada.",
+      "respuesta": "<p><strong>SAGA = Transacción distribuida con compensaciones (CTRL+Z):</strong></p><p><strong>🎭 ORQUESTADA (Director de orquesta):</strong></p><ul><li>Un COORDINADOR central controla todo el flujo.</li><li>Llama servicio A → si OK → llama B → si OK → llama C.</li><li>Si falla C → compensa B → compensa A.</li><li><strong>Pro:</strong> Fácil de debuggear, flujo claro.</li><li><strong>Con:</strong> Coordinador es punto de fallo.</li></ul><p><strong>💃 COREOGRAFIADA (Baile sin director):</strong></p><ul><li>Cada servicio REACCIONA a eventos.</li><li>A publica evento → B escucha y actúa → B publica → C escucha.</li><li><strong>Pro:</strong> Desacoplado, no hay punto central de fallo.</li><li><strong>Con:</strong> Difícil seguir el flujo, debugging complejo.</li></ul>",
+      "analogia": "ORQUESTADA es director de orquesta: él dice quién toca cuándo. COREOGRAFIADA es jam session: cada músico escucha y reacciona.",
+      "codigo": "// ORQUESTADA - Coordinador\n@Service\npublic class TransferenciaSagaOrquestador {\n    public Mono<Void> ejecutar(TransferenciaCmd cmd) {\n        return paso1_ValidarSaldo(cmd)\n            .then(paso2_DebitarOrigen(cmd))\n            .then(paso3_AcreditarDestino(cmd))\n            .onErrorResume(e -> compensar(cmd, e));\n    }\n}\n\n// COREOGRAFIADA - Eventos\n@KafkaListener(topics = \"cuenta-debitada\")\npublic void onCuentaDebitada(CuentaDebitadaEvent e) {\n    // Servicio destino reacciona al evento\n    acreditarCuenta(e.getDestino(), e.getMonto())\n        .subscribe();\n}",
+      "frase": "Orquestada para flujos críticos que necesitas controlar. Coreografiada para sistemas muy distribuidos y desacoplados."
+    },
+    {
+      "id": 57,
+      "categoria": "patrones",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es el patrón Sidecar y cómo se usa en Kubernetes/Service Mesh?",
+      "respuesta": "<p><strong>SIDECAR = Contenedor ASISTENTE que acompaña a tu app:</strong></p><ul><li>Vive en el mismo Pod que tu aplicación.</li><li>Comparte red y storage con el contenedor principal.</li><li>Maneja concerns transversales SIN modificar tu código.</li></ul><p><strong>USOS COMUNES:</strong></p><ul><li><strong>Envoy (Istio):</strong> mTLS, traffic management, observability.</li><li><strong>Log collector:</strong> Fluent Bit recoge logs.</li><li><strong>Secret injector:</strong> Vault Agent inyecta secretos.</li><li><strong>Proxy:</strong> Autenticación, rate limiting.</li></ul>",
+      "analogia": "Sidecar es tu GUARDAESPALDAS: va contigo a todos lados, maneja la seguridad, tú te enfocas en tu trabajo.",
+      "codigo": "# Pod con Sidecar (Envoy para Service Mesh)\napiVersion: v1\nkind: Pod\nmetadata:\n  name: ms-transferencias\n  annotations:\n    sidecar.istio.io/inject: \"true\"  # Istio inyecta Envoy\nspec:\n  containers:\n    - name: app\n      image: ms-transferencias:v1\n      ports:\n        - containerPort: 8080\n    # Istio inyecta automáticamente:\n    # - name: istio-proxy\n    #   image: envoy\n    #   # Intercepta TODO el tráfico",
+      "frase": "Sidecar mueve complejidad FUERA de tu código. Tu app hace negocio, el sidecar hace infraestructura."
+    },
+    {
+      "id": 58,
+      "categoria": "resiliencia",
+      "dificultad": "senior",
+      "pregunta": "Explica el patrón Retry con Exponential Backoff. ¿Por qué es mejor que retry simple?",
+      "respuesta": "<p><strong>RETRY SIMPLE:</strong> Falla → espera 1s → reintenta → espera 1s → reintenta...</p><p><strong>PROBLEMA:</strong> Si 1000 clientes reintentan cada 1s, BOMBARDEAS al servicio caído.</p><p><strong>EXPONENTIAL BACKOFF:</strong></p><ul><li>1er retry: espera 1s</li><li>2do retry: espera 2s</li><li>3er retry: espera 4s</li><li>4to retry: espera 8s</li></ul><p><strong>+ JITTER (ruido aleatorio):</strong> Añade variación para que no todos reintenten al mismo tiempo.</p>",
+      "analogia": "Retry simple es 1000 personas llamando al mismo tiempo cuando se cae la línea. Backoff con jitter es cada uno esperando diferente tiempo antes de volver a llamar.",
+      "codigo": "// Resilience4j con Exponential Backoff\nresilience4j:\n  retry:\n    instances:\n      servicioPagos:\n        maxAttempts: 4\n        waitDuration: 1s\n        enableExponentialBackoff: true\n        exponentialBackoffMultiplier: 2\n        enableRandomizedWait: true  # Jitter\n        randomizedWaitFactor: 0.5\n\n// Resultado: 1s, 2s (±50%), 4s (±50%), 8s (±50%)",
+      "frase": "Backoff exponencial + jitter evita 'thundering herd'. Sin esto, tus retries pueden tumbar al servicio que intentas recuperar."
+    },
+    {
+      "id": 59,
+      "categoria": "observabilidad",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es un Correlation ID y por qué es CRÍTICO en microservicios?",
+      "respuesta": "<p><strong>Correlation ID = UUID único que viaja por TODOS los servicios:</strong></p><ul><li>Usuario hace request → Gateway genera UUID.</li><li>UUID se propaga: Gateway → BFF → Servicio A → Servicio B → BD.</li><li>TODOS los logs incluyen ese UUID.</li><li>Cuando hay error, buscas por UUID y ves TODO el flujo.</li></ul><p><strong>SIN CORRELATION ID:</strong> 'Hay error en producción' → buscar aguja en pajar entre millones de logs.</p><p><strong>CON CORRELATION ID:</strong> 'Error con ID abc-123' → filtras y ves exactamente qué pasó.</p>",
+      "analogia": "Correlation ID es como número de TRACKING de tu paquete: sabes exactamente por dónde pasó y dónde está.",
+      "codigo": "// WebFilter que propaga Correlation ID\n@Component\npublic class CorrelationIdFilter implements WebFilter {\n    public Mono<Void> filter(ServerWebExchange ex, WebFilterChain chain) {\n        String correlationId = ex.getRequest().getHeaders()\n            .getFirst(\"X-Correlation-ID\");\n        \n        if (correlationId == null) {\n            correlationId = UUID.randomUUID().toString();\n        }\n        \n        // Agregar a response y contexto\n        ex.getResponse().getHeaders().add(\"X-Correlation-ID\", correlationId);\n        MDC.put(\"correlationId\", correlationId);  // Para logs\n        \n        return chain.filter(ex);\n    }\n}\n\n// Log automáticamente incluye correlationId\nlog.info(\"Procesando transferencia\");  // {correlationId: abc-123, msg: ...}",
+      "frase": "Sin Correlation ID, debuggear microservicios es IMPOSIBLE. Es tu hilo de Ariadna en el laberinto."
+    },
+    {
+      "id": 60,
+      "categoria": "data",
+      "dificultad": "lead",
+      "pregunta": "¿Qué es consistencia eventual y cómo la manejas en microservicios bancarios?",
+      "respuesta": "<p><strong>CONSISTENCIA EVENTUAL = los datos EVENTUALMENTE serán consistentes:</strong></p><ul><li>En sistemas distribuidos, NO puedes tener consistencia inmediata + disponibilidad + tolerancia a particiones (CAP).</li><li>Eliges: Disponibilidad + consistencia eventual.</li></ul><p><strong>EJEMPLO YAPE:</strong></p><ul><li>Yapeas S/100 → tu saldo baja inmediatamente (tu vista).</li><li>Destino ve el dinero 2 segundos después (eventual).</li><li>Ambos estados son 'correctos' en su momento.</li></ul><p><strong>TÉCNICAS:</strong></p><ul><li><strong>Eventos + Idempotencia:</strong> Procesar eventos aunque lleguen duplicados.</li><li><strong>Compensación:</strong> Si algo falla, revertir.</li><li><strong>Read-your-writes:</strong> Usuario siempre ve SUS cambios inmediatamente.</li></ul>",
+      "analogia": "Es como transferencia bancaria: tú ves menos saldo inmediatamente, el otro lo ve después. No es 'inconsistente', es 'eventualmente consistente'.",
+      "codigo": "// Read-your-writes con cache local\npublic Mono<Saldo> getSaldo(String cuentaId, String usuarioId) {\n    // Primero revisa cache local del usuario (ve sus cambios)\n    return cacheLocal.get(cuentaId + \":\" + usuarioId)\n        .switchIfEmpty(\n            // Si no hay, va a la BD (consistencia eventual)\n            saldoRepository.findByCuentaId(cuentaId)\n        );\n}\n\npublic Mono<Void> transferir(TransferenciaCmd cmd) {\n    return ejecutarTransferencia(cmd)\n        .then(cacheLocal.put(cmd.origen(), nuevoSaldo))  // Usuario ve su cambio\n        .then(publicarEvento(new TransferenciaRealizada(cmd)));  // Eventual\n}",
+      "frase": "En microservicios, consistencia inmediata es mentira costosa. Acepta eventual, diseña para ella, y duerme tranquilo."
+    },
+    {
+      "id": 61,
+      "categoria": "azure",
+      "dificultad": "lead",
+      "pregunta": "Diseña una arquitectura completa en Azure para un sistema bancario de pagos.",
+      "respuesta": "<p><strong>🏗️ ARQUITECTURA AZURE PARA PAGOS:</strong></p><p><strong>ENTRADA:</strong></p><ul><li><strong>Azure Front Door:</strong> CDN + WAF + Load Balancing global.</li><li><strong>API Management:</strong> Rate limiting, auth, throttling.</li></ul><p><strong>CÓMPUTO:</strong></p><ul><li><strong>AKS:</strong> Microservicios en Kubernetes.</li><li><strong>Azure Functions:</strong> Eventos async (notificaciones).</li></ul><p><strong>DATOS:</strong></p><ul><li><strong>Azure SQL:</strong> Transacciones ACID.</li><li><strong>Cosmos DB:</strong> Lecturas rápidas, global distribution.</li><li><strong>Redis Cache:</strong> Sesiones, rate limiting.</li></ul><p><strong>MENSAJERÍA:</strong></p><ul><li><strong>Service Bus:</strong> Colas transaccionales.</li><li><strong>Event Hub:</strong> Streaming alto volumen.</li></ul><p><strong>SEGURIDAD:</strong></p><ul><li><strong>Key Vault:</strong> Secretos.</li><li><strong>Managed Identity:</strong> Auth sin passwords.</li><li><strong>Private Link:</strong> Todo en red privada.</li></ul><p><strong>OBSERVABILIDAD:</strong></p><ul><li><strong>Application Insights:</strong> APM.</li><li><strong>Log Analytics:</strong> Logs centralizados.</li><li><strong>Azure Monitor:</strong> Alertas.</li></ul>",
+      "analogia": "Es como construir un banco físico: Front Door es la fachada con seguridad, AKS son las ventanillas, SQL es la bóveda, Redis es la caja chica, Key Vault guarda las llaves maestras.",
+      "codigo": "# Terraform simplificado\nresource \"azurerm_kubernetes_cluster\" \"aks\" {\n  name                = \"aks-pagos\"\n  kubernetes_version  = \"1.28\"\n  default_node_pool {\n    vm_size    = \"Standard_D4s_v3\"\n    node_count = 3\n  }\n}\n\nresource \"azurerm_redis_cache\" \"cache\" {\n  name     = \"redis-pagos\"\n  sku_name = \"Premium\"\n}\n\nresource \"azurerm_key_vault\" \"vault\" {\n  name = \"kv-pagos\"\n  sku_name = \"premium\"\n}",
+      "frase": "Azure te da los Legos, tú armas el castillo. Esta arquitectura escala a millones de transacciones."
+    },
+    {
+      "id": 62,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "¿Qué significa BASE vs ACID en bases de datos distribuidas?",
+      "respuesta": "<p><strong>ACID (SQL tradicional):</strong></p><ul><li><strong>A</strong>tomicity - Todo o nada</li><li><strong>C</strong>onsistency - Reglas siempre válidas</li><li><strong>I</strong>solation - Transacciones aisladas</li><li><strong>D</strong>urability - Persistencia garantizada</li></ul><p><strong>BASE (NoSQL/Distribuido):</strong></p><ul><li><strong>BA</strong>sically Available - Siempre responde algo</li><li><strong>S</strong>oft state - Estado puede cambiar sin input</li><li><strong>E</strong>ventual consistency - Eventualmente consistente</li></ul><p><strong>CUÁNDO USAR:</strong></p><ul><li><strong>ACID:</strong> Transferencias, pagos, inventario crítico.</li><li><strong>BASE:</strong> Likes, vistas, analytics, cache.</li></ul>",
+      "analogia": "ACID es notario: todo legal, firmado, sellado. BASE es WhatsApp: el mensaje llegará eventualmente, pero siempre puedes enviar.",
+      "codigo": "// ACID - PostgreSQL transaccional\n@Transactional(isolation = Isolation.SERIALIZABLE)\npublic void transferir(String origen, String destino, BigDecimal monto) {\n    cuentaRepo.debitar(origen, monto);\n    cuentaRepo.acreditar(destino, monto);\n}  // Commit o rollback automático\n\n// BASE - MongoDB eventual\npublic Mono<Void> registrarVista(String videoId) {\n    return mongoTemplate.updateFirst(\n        query(where(\"id\").is(videoId)),\n        new Update().inc(\"vistas\", 1),  // Eventual, no crítico\n        Video.class\n    ).then();\n}",
+      "frase": "No todo necesita ACID. Pagar sí. Contar likes no. Usa la herramienta correcta para el problema."
+    },
+    {
+      "id": 63,
+      "categoria": "reactivo",
+      "dificultad": "lead",
+      "pregunta": "¿Cuál es la diferencia entre Cold y Hot Publishers en programación reactiva?",
+      "respuesta": "<p><strong>🥶 COLD PUBLISHER (Perezoso):</strong></p><ul><li>NO hace nada hasta que alguien se suscribe.</li><li>Cada suscriptor recibe su PROPIA ejecución desde el inicio.</li><li>Ejemplo: Consulta a BD, llamada HTTP.</li></ul><p><strong>🔥 HOT PUBLISHER (Activo):</strong></p><ul><li>Emite datos aunque nadie escuche.</li><li>Suscriptores reciben datos desde cuando se conectan (se pierden los anteriores).</li><li>Ejemplo: Eventos de mouse, precios de acciones en tiempo real, WebSocket.</li></ul><p><strong>CONVERTIR:</strong> .share() o .cache() convierten Cold → Hot.</p>",
+      "analogia": "COLD es Netflix: la película empieza cuando TÚ le das play. HOT es TV en vivo: está transmitiendo, te conectas y ves desde ahí.",
+      "codigo": "// COLD - Cada suscriptor ejecuta la consulta\nMono<Usuario> coldMono = usuarioRepo.findById(\"123\");\ncoldMono.subscribe();  // Ejecuta query\ncoldMono.subscribe();  // Ejecuta query OTRA VEZ\n\n// HOT con cache - Una ejecución, múltiples suscriptores\nMono<Usuario> hotMono = usuarioRepo.findById(\"123\").cache();\nhotMono.subscribe();  // Ejecuta query\nhotMono.subscribe();  // USA CACHE, no re-ejecuta\n\n// HOT con share - Comparte ejecución en curso\nFlux<Precio> precios = precioService.streamPrecios().share();\nprecios.subscribe(p -> log.info(\"Suscriptor 1: {}\", p));\nprecios.subscribe(p -> log.info(\"Suscriptor 2: {}\", p));  // Mismo stream",
+      "frase": "Cold para consultas (cada uno su resultado). Hot para eventos en tiempo real (todos ven lo mismo)."
+    },
+    {
+      "id": 64,
+      "categoria": "patrones",
+      "dificultad": "lead",
+      "pregunta": "¿Qué es el patrón Strangler Fig y cómo migras un monolito sin downtime?",
+      "respuesta": "<p><strong>STRANGLER FIG = Migración gradual rodeando al monolito:</strong></p><ol><li><strong>Identificar bounded context:</strong> ¿Qué dominio extraer primero?</li><li><strong>Crear microservicio nuevo:</strong> Implementa la funcionalidad.</li><li><strong>Facade/Proxy:</strong> Router decide: ¿monolito o micro?</li><li><strong>Migrar tráfico gradual:</strong> 10% → 50% → 100% al micro.</li><li><strong>Eliminar código del monolito:</strong> Cuando 100% migrado.</li><li><strong>Repetir:</strong> Siguiente dominio.</li></ol><p><strong>DURACIÓN TÍPICA:</strong> 2-4 años en banca. NO es sprint, es maratón.</p>",
+      "analogia": "Strangler Fig es planta que crece ALREDEDOR del árbol viejo hasta reemplazarlo. El árbol (monolito) sigue vivo mientras la planta (micros) crece.",
+      "codigo": "// Facade que decide monolito vs microservicio\n@Service\npublic class TransferenciaFacade {\n    @Value(\"${feature.usar-nuevo-servicio}\") \n    private int porcentajeNuevo;  // 0, 10, 50, 100\n    \n    public Mono<TransferenciaResponse> transferir(TransferenciaCmd cmd) {\n        if (shouldUseNewService()) {\n            return nuevoMicroservicio.transferir(cmd);  // Nuevo\n        }\n        return monolitoClient.transferir(cmd);  // Legacy\n    }\n    \n    private boolean shouldUseNewService() {\n        return random.nextInt(100) < porcentajeNuevo;\n    }\n}",
+      "frase": "Migrar monolito de golpe es suicidio. Strangler te da red de seguridad: si el micro falla, el monolito sigue ahí."
+    },
+    {
+      "id": 65,
+      "categoria": "liderazgo",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo documentas decisiones arquitectónicas? Explica ADR (Architecture Decision Records).",
+      "respuesta": "<p><strong>ADR = Documento corto que explica UNA decisión técnica:</strong></p><p><strong>ESTRUCTURA:</strong></p><ul><li><strong>Título:</strong> ADR-001: Usar PostgreSQL como BD principal.</li><li><strong>Estado:</strong> Propuesto → Aceptado → Deprecado → Reemplazado.</li><li><strong>Contexto:</strong> ¿Qué problema enfrentamos?</li><li><strong>Decisión:</strong> ¿Qué decidimos?</li><li><strong>Consecuencias:</strong> Pros, contras, trade-offs.</li><li><strong>Alternativas consideradas:</strong> ¿Qué más evaluamos?</li></ul><p><strong>BENEFICIOS:</strong> Nuevos devs entienden el 'por qué', evitas re-discutir decisiones, documentación viva.</p>",
+      "analogia": "ADR es como acta de reunión de arquitectura: quedó documentado QUÉ se decidió, POR QUÉ, y QUÉ se descartó. No hay 'yo no sabía'.",
+      "codigo": "# docs/adr/ADR-001-usar-postgresql.md\n\n# ADR-001: Usar PostgreSQL como base de datos principal\n\n## Estado\nAceptado (2024-01-15)\n\n## Contexto\nNecesitamos BD para transacciones bancarias. \nRequisitos: ACID, JSON support, performance.\n\n## Decisión\nUsaremos PostgreSQL 15.\n\n## Consecuencias\n### Positivas\n- ACID completo para transacciones\n- JSON/JSONB para flexibilidad\n- Ecosistema maduro, buen soporte\n\n### Negativas\n- Escala vertical principalmente\n- Sharding manual si crecemos mucho\n\n## Alternativas Consideradas\n- MySQL: Descartado por JSON support inferior\n- MongoDB: Descartado por necesidad de ACID\n- CockroachDB: Descartado por costo y complejidad",
+      "frase": "Código sin ADRs es como edificio sin planos: nadie sabe por qué se construyó así. Documenta decisiones, no solo código."
+    }
+  ]
+}
