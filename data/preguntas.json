@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": "1.0",
-    "totalPreguntas": 72,
+    "totalPreguntas": 90,
     "categorias": ["arquitectura", "reactivo", "resiliencia", "cloud", "data", "seguridad", "observabilidad", "liderazgo", "patrones", "azure", "fundamentos"]
   },
   "preguntas": [
@@ -724,6 +724,186 @@
       "analogia": "PREDICATE = Guardia (¿pasas? sí/no). CONSUMER = Buzón (recibe, no devuelve). SUPPLIER = Máquina expendedora (solo da). FUNCTION = Procesador (recibe, transforma, devuelve).",
       "codigo": "// Ejemplo completo en un servicio bancario\n@Service\npublic class TransferenciaService {\n    \n    // PREDICATE - Validación\n    private final Predicate<TransferenciaCmd> esValida = cmd ->\n        cmd.getMonto().compareTo(BigDecimal.ZERO) > 0;\n    \n    // CONSUMER - Side effects\n    private final Consumer<Transferencia> logExito = tx ->\n        log.info(\"TX exitosa: {}\", tx.getId());\n    \n    // SUPPLIER - Factory/Default\n    private final Supplier<String> generarId = () -> \n        UUID.randomUUID().toString();\n    \n    // FUNCTION - Transformación\n    private final Function<TransferenciaCmd, Transferencia> toEntity = cmd ->\n        Transferencia.builder()\n            .id(generarId.get())  // Usa Supplier\n            .origen(cmd.getOrigen())\n            .destino(cmd.getDestino())\n            .monto(cmd.getMonto())\n            .build();\n    \n    public Mono<Transferencia> ejecutar(TransferenciaCmd cmd) {\n        if (!esValida.test(cmd)) {  // Usa Predicate\n            return Mono.error(new ValidacionException());\n        }\n        return Mono.just(cmd)\n            .map(toEntity)           // Usa Function\n            .flatMap(transRepo::save)\n            .doOnSuccess(logExito);  // Usa Consumer\n    }\n}",
       "frase": "Predicate=filtrar, Consumer=efectos, Supplier=generar, Function=transformar. Son los 4 jinetes de Java funcional."
+    },
+    {
+      "id": 73,
+      "categoria": "fundamentos",
+      "dificultad": "junior",
+      "pregunta": "Explícame JVM, JRE y JDK como si fuera un ceviche.",
+      "respuesta": "<p><strong>🍋 JVM (Java Virtual Machine):</strong> Es el COCINERO. Lee tu receta (bytecode) y prepara el plato. No le importa si la receta es de Lima o Piura, él cocina igual en cualquier lado.</p><p><strong>🍽️ JRE (Java Runtime Environment):</strong> Es el RESTAURANTE BÁSICO. Tiene cocinero + platos + cubiertos. Solo puedes COMER (ejecutar), no cocinar recetas nuevas.</p><p><strong>👨‍🍳 JDK (Java Development Kit):</strong> Es la COCINA COMPLETA con escuela de chefs. Puedes CREAR recetas nuevas (compilar código).</p><p><strong>RESUMEN:</strong> Usuario = JRE. Developer = JDK. Ambos tienen JVM adentro.</p>",
+      "analogia": "JVM cocina. JRE es restaurante. JDK es escuela de cocina + restaurante.",
+      "codigo": "# ¿Qué tienes instalado?\njava -version   # Tienes JRE (puedes comer)\njavac -version  # Tienes JDK (puedes cocinar)\n\n# El truco mágico de Java:\n# Escribes código UNA vez, corre en CUALQUIER JVM\n# Windows, Mac, Linux... al JVM le da igual",
+      "frase": "JDK para crear, JRE para correr. Simple."
+    },
+    {
+      "id": 74,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "OOP vs Funcional vs Reactivo: ¿Cuándo uso cada uno? Dame un ejemplo con Yape.",
+      "respuesta": "<p><strong>🏢 OOP (Orientado a Objetos):</strong> Para MODELAR cosas del mundo real. Cuenta, Usuario, Transferencia son OBJETOS con datos y comportamiento.</p><p><strong>⚡ FUNCIONAL:</strong> Para TRANSFORMAR datos sin efectos raros. Filtrar cuentas activas, calcular total, mapear a DTOs.</p><p><strong>🌊 REACTIVO:</strong> Para NO QUEDARTE DORMIDO esperando. Mientras consultas saldo, ya estás procesando otra cosa.</p><p><strong>EN YAPE:</strong> Modelas Cuenta (OOP), filtras las activas (Funcional), consultas saldo sin bloquear (Reactivo). ¡Las 3 juntas!</p>",
+      "analogia": "OOP = organizar tu empresa en departamentos. Funcional = recetas exactas de cocina. Reactivo = call center donde nadie espera en hold.",
+      "codigo": "// OOP - Modelar la cuenta\nCuenta cuenta = new Cuenta(\"123\", 1500.00);\n\n// FUNCIONAL - Filtrar y transformar\ncuentas.stream()\n    .filter(c -> c.estaActiva())  // Solo activas\n    .map(Cuenta::getSaldo)         // Solo saldos\n    .reduce(BigDecimal::add);      // Sumar\n\n// REACTIVO - Sin bloquear\ncuentaRepo.findById(id)  // No esperas, te avisan\n    .map(this::enriquecer)\n    .subscribe();",
+      "frase": "OOP para modelar, Funcional para transformar, Reactivo para no dormir. Usa las 3."
+    },
+    {
+      "id": 75,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "Los 4 pilares de OOP explicados con el BCP.",
+      "respuesta": "<p><strong>📦 ENCAPSULAMIENTO:</strong> El cajero del BCP no te muestra la bóveda. Solo ves la ventanilla (métodos públicos), la plata está escondida (private).</p><p><strong>👨‍👩‍👧 HERENCIA:</strong> CuentaAhorro y CuentaCorriente son hijas de Cuenta. Heredan comportamiento pero cada una tiene lo suyo.</p><p><strong>🎭 POLIMORFISMO:</strong> El método <code>cobrarMantenimiento()</code> existe en todas las cuentas, pero cada tipo cobra diferente. Mismo nombre, diferente acción.</p><p><strong>🎨 ABSTRACCIÓN:</strong> Usas el app del BCP sin saber cómo funciona el core bancario. Solo ves botones, no el código de atrás.</p>",
+      "analogia": "ENCAPSULAR = bóveda cerrada. HEREDAR = apellido de familia. POLIMORFISMO = 'pagar' es diferente en efectivo vs tarjeta. ABSTRACCIÓN = app simple, backend complejo.",
+      "codigo": "// El BCP en código\npublic class Cuenta {\n    private BigDecimal saldo;  // ENCAPSULADO - nadie toca directo\n    public BigDecimal getSaldo() { return saldo; }  // Acceso controlado\n}\n\npublic class CuentaAhorro extends Cuenta {  // HERENCIA\n    public void cobrarMantenimiento() {\n        // POLIMORFISMO - cada cuenta cobra diferente\n        this.debitar(5.00);  \n    }\n}\n\n// ABSTRACCIÓN - usas sin saber cómo funciona\ncuenta.transferir(destino, 100);  // ¿Cómo lo hace? No te importa",
+      "frase": "OOP es el BCP: bóveda cerrada, cuentas que heredan, cada una cobra diferente, y tú solo ves el app."
+    },
+    {
+      "id": 76,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "¿Qué trajo Java 11 y por qué todos lo usan en empresas?",
+      "respuesta": "<p><strong>Java 11 = El Toyota Corolla de Java.</strong> No es el más sexy pero es LTS (Long Term Support) = soporte por AÑOS, no meses.</p><p><strong>LO NUEVO:</strong></p><ul><li><strong>var en lambdas:</strong> Menos tipeo.</li><li><strong>Strings mejorados:</strong> isBlank(), strip(), repeat().</li><li><strong>HttpClient nuevo:</strong> Adiós al horrible HttpURLConnection.</li><li><strong>Correr sin compilar:</strong> <code>java MiApp.java</code> directo.</li></ul><p><strong>¿POR QUÉ LTS IMPORTA?</strong> Las empresas quieren ESTABILIDAD. No van a actualizar Java cada 6 meses. LTS = tranquilidad.</p>",
+      "analogia": "LTS es Toyota: no es el más nuevo pero hay repuestos por años. Non-LTS es Tesla beta: cool pero arriesgado.",
+      "codigo": "// Java 11 goodies\n\"  \".isBlank();        // true - ¡al fin!\n\"hola\".repeat(3);     // \"holaholahola\"\n\"  hola  \".strip();   // \"hola\" - mejor que trim()\n\n// HttpClient moderno (ya no es 1999)\nvar client = HttpClient.newHttpClient();\nvar request = HttpRequest.newBuilder()\n    .uri(URI.create(\"https://api.yape.com/saldo\"))\n    .GET().build();\nvar response = client.send(request, BodyHandlers.ofString());\n\n// Correr directo sin javac\n// $ java MiScript.java",
+      "frase": "Java 11 LTS: el que usan las empresas serias. Estable, soporte largo, cero drama."
+    },
+    {
+      "id": 77,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "¿Qué trajo Java 17 que hace que todos quieran migrar?",
+      "respuesta": "<p><strong>Java 17 = Records y Pattern Matching.</strong> Menos código, mismo resultado.</p><p><strong>RECORDS:</strong> DTOs en UNA línea. Adiós a 50 líneas de getters, setters, equals, hashCode.</p><p><strong>PATTERN MATCHING:</strong> El instanceof ahora hace cast automático. Ya no escribes el cast manual.</p><p><strong>SEALED CLASSES:</strong> Tú decides quién puede heredar de tu clase. Control total.</p><p><strong>TEXT BLOCKS:</strong> Strings multilínea con triple comilla. JSON y SQL legibles.</p><p><strong>¿POR QUÉ MIGRAR?</strong> Spring Boot 3+ REQUIERE Java 17 mínimo. No hay opción.</p>",
+      "analogia": "Java 17 es escribir 'CuentaDTO' y que Java genere 50 líneas por ti. Menos código = menos bugs.",
+      "codigo": "// RECORD - DTO en 1 línea (antes eran 50+)\npublic record CuentaDTO(String id, BigDecimal saldo) {}\n// ¡Ya tiene constructor, getters, equals, hashCode, toString!\n\n// PATTERN MATCHING - Cast automático\n// ANTES (Java 11)\nif (obj instanceof Cuenta) {\n    Cuenta c = (Cuenta) obj;  // Cast manual 😴\n    return c.getSaldo();\n}\n// DESPUÉS (Java 17)\nif (obj instanceof Cuenta c) {  // Cast automático 🔥\n    return c.getSaldo();\n}\n\n// TEXT BLOCKS - JSON legible\nString json = \"\"\"\n    {\"nombre\": \"Juan\", \"saldo\": 1500}\n    \"\"\";",
+      "frase": "Java 17: Records eliminan boilerplate, Pattern Matching elimina casts. Spring Boot 3 lo exige."
+    },
+    {
+      "id": 78,
+      "categoria": "fundamentos",
+      "dificultad": "lead",
+      "pregunta": "¿Qué son los Virtual Threads de Java 21 y por qué cambian todo?",
+      "respuesta": "<p><strong>Virtual Threads = MILLONES de hilos sin sudar.</strong></p><p><strong>ANTES (Platform Threads):</strong> Cada hilo = recursos del sistema operativo. Máximo ~10,000 hilos antes de que tu servidor llore.</p><p><strong>AHORA (Virtual Threads):</strong> La JVM maneja los hilos. Puedes crear MILLONES. Código bloqueante se vuelve eficiente.</p><p><strong>¿QUÉ SIGNIFICA?</strong> Puedes escribir código simple (bloqueante) y tener performance de código reactivo. Lo mejor de ambos mundos.</p><p><strong>¿ADIÓS WEBFLUX?</strong> Para muchos casos, sí. Virtual Threads simplifican todo.</p>",
+      "analogia": "Antes tenías 10 empleados caros que cobraban aunque esperaran. Ahora tienes infinitos empleados gratis que solo trabajan cuando hay chamba.",
+      "codigo": "// ANTES - Máximo ~10,000 hilos\nExecutorService executor = Executors.newFixedThreadPool(100);\n\n// JAVA 21 - Millones de hilos, cero drama\nExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();\n\n// O más simple\nThread.startVirtualThread(() -> {\n    // Código bloqueante PERO eficiente\n    var saldo = httpClient.send(request);  // Bloquea sin problema\n    database.save(saldo);  // Bloquea sin problema\n    // La JVM maneja todo internamente\n});\n\n// 1 millón de virtual threads? No hay problema\nfor (int i = 0; i < 1_000_000; i++) {\n    Thread.startVirtualThread(() -> hacerAlgo());\n}",
+      "frase": "Virtual Threads: código simple con performance de reactivo. Game changer de Java 21."
+    },
+    {
+      "id": 79,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "Spring Boot vs Quarkus: ¿Cuál elijo para mi microservicio?",
+      "respuesta": "<p><strong>🍃 SPRING BOOT:</strong> El VETERANO. Todo el mundo lo conoce, documentación infinita, librerías para todo. Arranca en 2-5 segundos, usa 200-500MB RAM.</p><p><strong>⚡ QUARKUS:</strong> El JOVEN VELOZ. Nació para containers y serverless. Arranca en 0.02 segundos (native), usa 20MB RAM.</p><p><strong>¿CUÁNDO SPRING?</strong> Empresa grande, equipo que ya lo conoce, necesitas TODO el ecosistema.</p><p><strong>¿CUÁNDO QUARKUS?</strong> Kubernetes, serverless, cada milisegundo y MB cuenta, escalar a 0.</p>",
+      "analogia": "Spring Boot = Land Cruiser: pesado pero va a cualquier lado. Quarkus = Moto deportiva: arranca en 1 segundo, liviana, perfecta para delivery.",
+      "codigo": "// SPRING BOOT - El clásico\n@RestController\npublic class CuentaController {\n    @Autowired CuentaService service;\n    \n    @GetMapping(\"/cuentas/{id}\")\n    public Cuenta get(@PathVariable String id) {\n        return service.findById(id);\n    }\n}\n\n// QUARKUS - El veloz\n@Path(\"/cuentas\")\npublic class CuentaResource {\n    @Inject CuentaService service;\n    \n    @GET @Path(\"/{id}\")\n    public Cuenta get(@PathParam(\"id\") String id) {\n        return service.findById(id);\n    }\n}\n\n// Quarkus native: 50MB ejecutable, 0.02s startup\n# ./mvnw package -Pnative",
+      "frase": "Spring Boot cuando necesitas todo. Quarkus cuando cada MB y milisegundo cuenta."
+    },
+    {
+      "id": 80,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es Inyección de Dependencias? Explícalo con un ceviche.",
+      "respuesta": "<p><strong>SIN INYECCIÓN:</strong> Eres chef que va al mercado, compra pescado, limones, cebolla, cocina todo. Si cambia el proveedor de pescado, tienes que cambiar TU código.</p><p><strong>CON INYECCIÓN:</strong> Eres chef al que le TRAEN los ingredientes ya listos. Solo cocinas. ¿Cambió el proveedor? No te importa, te siguen trayendo pescado.</p><p><strong>EN CÓDIGO:</strong> No haces <code>new MiDependencia()</code>. El framework te la INYECTA. Desacoplado, testeable, flexible.</p>",
+      "analogia": "Sin DI: vas al mercado. Con DI: te traen los ingredientes. Tú solo cocinas.",
+      "codigo": "// ❌ SIN INYECCIÓN - Acoplado, difícil testear\npublic class TransferenciaService {\n    private CuentaRepo repo = new CuentaRepoImpl();  // TÚ lo creas\n    private Notificador notif = new EmailNotificador();  // TÚ lo creas\n    // ¿Quieres cambiar a SMS? Tienes que modificar ESTA clase\n}\n\n// ✅ CON INYECCIÓN - Desacoplado, testeable\n@Service\npublic class TransferenciaService {\n    private final CuentaRepo repo;      // Solo declaras\n    private final Notificador notif;    // Solo declaras\n    \n    public TransferenciaService(CuentaRepo repo, Notificador notif) {\n        this.repo = repo;    // Spring te lo INYECTA\n        this.notif = notif;  // Spring te lo INYECTA\n    }\n}\n\n// En test: inyectas MOCKS fácilmente\nvar service = new TransferenciaService(mockRepo, mockNotif);",
+      "frase": "DI: tú declaras qué necesitas, el framework te lo da. Código limpio, testeable."
+    },
+    {
+      "id": 81,
+      "categoria": "fundamentos",
+      "dificultad": "junior",
+      "pregunta": "¿Qué es Lombok y por qué TODOS lo usan?",
+      "respuesta": "<p><strong>Lombok = Tu asistente que escribe código aburrido.</strong></p><p>Antes escribías 50 líneas de getters, setters, constructores, equals, hashCode, toString. Ahora pones UNA anotación y Lombok lo genera.</p><p><strong>LAS 3 ANOTACIONES QUE USARÁS SIEMPRE:</strong></p><ul><li><strong>@Data:</strong> Getters + Setters + equals + hashCode + toString.</li><li><strong>@Builder:</strong> Patrón Builder automático.</li><li><strong>@Slf4j:</strong> Logger listo para usar.</li></ul>",
+      "analogia": "Lombok es tu practicante que escribe el código aburrido. Tú dices '@Data' y él escribe 50 líneas.",
+      "codigo": "// SIN LOMBOK - 50+ líneas de código aburrido 😴\npublic class Cuenta {\n    private String id;\n    private BigDecimal saldo;\n    // + getter getId(), setter setId()\n    // + getter getSaldo(), setter setSaldo()\n    // + equals(), hashCode(), toString()\n    // + constructores...\n    // ABURRIDO.\n}\n\n// CON LOMBOK - 5 líneas y listo 🔥\n@Data\n@Builder\n@NoArgsConstructor\n@AllArgsConstructor\npublic class Cuenta {\n    private String id;\n    private BigDecimal saldo;\n}\n\n// Uso del Builder generado\nCuenta cuenta = Cuenta.builder()\n    .id(\"123\")\n    .saldo(new BigDecimal(\"1500\"))\n    .build();\n\n// @Slf4j te da logger gratis\n@Slf4j\n@Service\npublic class MiServicio {\n    public void hacer() {\n        log.info(\"Funcionando!\");  // log ya existe!\n    }\n}",
+      "frase": "@Data + @Builder + @Slf4j en cada clase. Lombok es obligatorio en Java moderno."
+    },
+    {
+      "id": 82,
+      "categoria": "seguridad",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es JWT? Explícalo como pase VIP de concierto.",
+      "respuesta": "<p><strong>JWT = Tu pase VIP firmado.</strong></p><p>Tiene tu nombre, zona permitida (roles), fecha de vencimiento, y un holograma (firma) que prueba que es real.</p><p><strong>3 PARTES:</strong></p><ul><li><strong>Header:</strong> Tipo de pase y cómo verificar.</li><li><strong>Payload:</strong> Tu info (userId, roles, cuándo expira).</li><li><strong>Signature:</strong> El holograma que prueba que es real.</li></ul><p><strong>FLUJO:</strong> Login → Te dan JWT → Lo mandas en cada request → Servidor verifica holograma y te deja pasar.</p><p><strong>MAGIA:</strong> El servidor NO guarda sesiones. Todo está en el token. STATELESS.</p>",
+      "analogia": "JWT es tu pase VIP: tiene tu nombre, zona permitida, vencimiento, y holograma. El guardia lo verifica sin llamar a nadie.",
+      "codigo": "// JWT se ve así (3 partes separadas por punto)\n// eyJhbGc.eyJzdWI.firma\n// HEADER.PAYLOAD.SIGNATURE\n\n// GENERAR TOKEN\nString token = Jwts.builder()\n    .setSubject(usuario.getId())        // Quién eres\n    .claim(\"roles\", usuario.getRoles()) // Qué puedes hacer\n    .setExpiration(new Date(now + 1hora))  // Cuándo expira\n    .signWith(SECRET_KEY)               // Firmar (holograma)\n    .compact();\n\n// ENVIAR EN CADA REQUEST\n// Authorization: Bearer eyJhbGc.eyJzdWI.firma\n\n// VALIDAR\nClaims claims = Jwts.parser()\n    .setSigningKey(SECRET_KEY)\n    .parseClaimsJws(token)\n    .getBody();\n// Si la firma no cuadra = token falso = 401",
+      "frase": "JWT: pase firmado con todo tu info. Servidor no guarda nada, todo está en el token."
+    },
+    {
+      "id": 83,
+      "categoria": "seguridad",
+      "dificultad": "lead",
+      "pregunta": "¿Qué es OAuth2? Explícalo como valet parking.",
+      "respuesta": "<p><strong>OAuth2 = Valet parking para tus datos.</strong></p><p>Le das una llave ESPECIAL (token) al valet (app) para que estacione tu carro. Pero NO le das la llave de tu casa. Acceso LIMITADO y TEMPORAL.</p><p><strong>FLUJOS PRINCIPALES:</strong></p><ul><li><strong>Authorization Code:</strong> Web apps. Usuario aprueba, app recibe código, intercambia por token.</li><li><strong>Client Credentials:</strong> Máquina a máquina. Sin usuario. Servicio A habla con Servicio B.</li></ul><p><strong>NO CONFUNDIR:</strong> OAuth2 es AUTORIZACIÓN (qué puedes hacer), no AUTENTICACIÓN (quién eres).</p>",
+      "analogia": "OAuth2 = valet parking: llave especial para estacionar, no para entrar a tu casa. Acceso limitado.",
+      "codigo": "// AUTHORIZATION CODE FLOW (Web apps)\n// 1. Usuario va a login\nGET https://auth.banco.com/authorize?\n    response_type=code&\n    client_id=mi-app&\n    redirect_uri=https://mi-app/callback&\n    scope=leer:saldo\n\n// 2. Usuario aprueba, recibe código\n// 3. Backend intercambia código por token\nPOST https://auth.banco.com/token\n    grant_type=authorization_code&\n    code=ABC123&\n    client_secret=SECRET\n\n// 4. Recibe tokens\n{\"access_token\": \"eyJ...\", \"refresh_token\": \"eyJ...\"}\n\n// CLIENT CREDENTIALS (servicio a servicio)\nPOST https://auth.banco.com/token\n    grant_type=client_credentials&\n    client_id=mi-servicio&\n    client_secret=SECRET\n// No hay usuario, es máquina hablando con máquina",
+      "frase": "Authorization Code para web apps con usuarios. Client Credentials para servicios hablando entre sí."
+    },
+    {
+      "id": 84,
+      "categoria": "seguridad",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo protejo mis microservicios con Spring Security + JWT?",
+      "respuesta": "<p><strong>ARQUITECTURA:</strong></p><ul><li><strong>Gateway:</strong> Valida JWT una vez. Extrae claims.</li><li><strong>Microservicios:</strong> Reciben claims en headers, confían en Gateway.</li></ul><p><strong>FLUJO:</strong> Request → Gateway valida JWT → Extrae userId/roles → Propaga headers → Microservicio confía y autoriza.</p><p><strong>SPRING SECURITY:</strong> Defines qué rutas son públicas, cuáles necesitan auth, cuáles necesitan roles específicos.</p>",
+      "analogia": "Gateway es recepción del edificio: valida tu credencial UNA vez. Cada oficina ve tu gafete y decide si te deja pasar.",
+      "codigo": "@Configuration\n@EnableWebFluxSecurity\npublic class SecurityConfig {\n    @Bean\n    public SecurityWebFilterChain security(ServerHttpSecurity http) {\n        return http\n            .csrf(c -> c.disable())\n            .authorizeExchange(auth -> auth\n                .pathMatchers(\"/public/**\").permitAll()     // Libre\n                .pathMatchers(\"/admin/**\").hasRole(\"ADMIN\") // Solo admin\n                .pathMatchers(\"/api/**\").authenticated()    // Logueado\n                .anyExchange().authenticated()\n            )\n            .oauth2ResourceServer(oauth -> oauth.jwt())\n            .build();\n    }\n}\n\n// Control fino en método\n@PreAuthorize(\"hasRole('ADMIN') or #userId == authentication.name\")\npublic Mono<Cuenta> getCuenta(String userId) {\n    return cuentaRepo.findByUserId(userId);\n}",
+      "frase": "Gateway valida una vez, microservicios confían en headers. Defense in depth."
+    },
+    {
+      "id": 85,
+      "categoria": "data",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es Kafka? Explícalo como periódico vs carta.",
+      "respuesta": "<p><strong>KAFKA = PERIÓDICO.</strong> Se imprime una vez, TODOS pueden leerlo, queda en archivo PARA SIEMPRE. Puedes leer el periódico de ayer.</p><p><strong>RABBITMQ = CARTA.</strong> Se entrega a UNO, confirmas recibido, se destruye.</p><p><strong>CONCEPTOS KAFKA:</strong></p><ul><li><strong>Topic:</strong> El periódico (ej: 'transferencias').</li><li><strong>Partition:</strong> Secciones del periódico para leer en paralelo.</li><li><strong>Producer:</strong> El que escribe noticias.</li><li><strong>Consumer:</strong> El que lee noticias.</li><li><strong>Offset:</strong> Página donde te quedaste. Puedes volver atrás.</li></ul>",
+      "analogia": "Kafka = periódico: todos leen, queda archivado. RabbitMQ = carta: uno recibe, se destruye.",
+      "codigo": "// PRODUCER - Publicar evento\n@Service\npublic class EventPublisher {\n    @Autowired KafkaTemplate<String, Object> kafka;\n    \n    public void publicar(TransferenciaEvent evento) {\n        kafka.send(\"transferencias\",     // Topic\n            evento.getCuentaId(),         // Partition key\n            evento);                      // Mensaje\n    }\n}\n\n// CONSUMER - Leer eventos\n@Service\npublic class EventConsumer {\n    @KafkaListener(topics = \"transferencias\", groupId = \"notificaciones\")\n    public void procesar(TransferenciaEvent evento) {\n        log.info(\"Recibido: {}\", evento);\n        // Procesar...\n    }\n}",
+      "frase": "Kafka para eventos que necesitas guardar y replayear. RabbitMQ para colas simples."
+    },
+    {
+      "id": 86,
+      "categoria": "data",
+      "dificultad": "lead",
+      "pregunta": "¿Cómo garantizo que Kafka NO pierda mensajes de transferencias?",
+      "respuesta": "<p><strong>GARANTIZAR ORDEN:</strong> Usa Partition Key = ID de cuenta. Todas las transferencias de la misma cuenta van a la misma partición → ORDEN garantizado.</p><p><strong>NO PERDER MENSAJES:</strong></p><ul><li><strong>Producer:</strong> <code>acks=all</code> (espera que TODAS las réplicas confirmen).</li><li><strong>Producer:</strong> <code>enable.idempotence=true</code> (evita duplicados).</li><li><strong>Consumer:</strong> Commit MANUAL después de procesar exitosamente.</li></ul><p><strong>SI FALLA MUCHO:</strong> Dead Letter Topic (DLT) para mensajes problemáticos.</p>",
+      "analogia": "acks=all = carta certificada: no dicen OK hasta que firmaste. Partition key = fila del banco: misma fila, mismo orden.",
+      "codigo": "# application.yml - Producer seguro\nspring.kafka.producer:\n  acks: all                    # Espera TODAS las réplicas\n  enable-idempotence: true     # No duplica si reintenta\n  retries: 3\n\n// Consumer con commit manual\n@KafkaListener(topics = \"transferencias\")\npublic void procesar(TransferenciaEvent e, Acknowledgment ack) {\n    try {\n        procesar(e);\n        ack.acknowledge();  // Commit SOLO si procesó bien\n    } catch (Exception ex) {\n        // NO hace commit, se reprocesa\n        log.error(\"Falló: {}\", ex.getMessage());\n    }\n}\n\n// Partition key para orden\nkafka.send(\"transferencias\", \n    evento.getCuentaId(),  // KEY: mismo ID = misma partición = orden\n    evento);",
+      "frase": "acks=all, idempotencia, commit manual, partition key. Perder transferencia = perder plata."
+    },
+    {
+      "id": 87,
+      "categoria": "data",
+      "dificultad": "lead",
+      "pregunta": "¿Qué es Outbox Pattern y por qué lo necesito con Kafka?",
+      "respuesta": "<p><strong>EL PROBLEMA:</strong> Guardas en BD y luego publicas a Kafka. ¿Qué pasa si la BD guarda pero Kafka falla? Inconsistencia.</p><p><strong>OUTBOX PATTERN:</strong></p><ol><li>En la MISMA transacción: guarda datos + guarda evento en tabla <code>outbox</code>.</li><li>Debezium (CDC) lee la tabla <code>outbox</code>.</li><li>Debezium publica a Kafka.</li></ol><p><strong>RESULTADO:</strong> Si la transacción falla, no hay evento. Si pasa, HAY evento. Consistencia garantizada.</p>",
+      "analogia": "Outbox = dejar carta en bandeja de salida. La transacción la deja ahí, el cartero (Debezium) la recoge y envía.",
+      "codigo": "// Transacción atómica: datos + evento\n@Transactional\npublic Mono<Transferencia> ejecutar(TransferenciaCmd cmd) {\n    return transferenciaRepo.save(cmd.toEntity())\n        // En la MISMA transacción, guarda en outbox\n        .flatMap(tx -> outboxRepo.save(OutboxEvent.builder()\n            .aggregateType(\"Transferencia\")\n            .aggregateId(tx.getId())\n            .type(\"TransferenciaCreada\")\n            .payload(toJson(tx))\n            .build())\n            .thenReturn(tx));\n}\n// Si falla cualquier cosa, se hace rollback de TODO\n// Debezium lee outbox y publica a Kafka\n// Consistencia BD + Kafka garantizada",
+      "frase": "Outbox: evento en misma transacción que datos. Debezium lo publica. Consistencia garantizada."
+    },
+    {
+      "id": 88,
+      "categoria": "cloud",
+      "dificultad": "senior",
+      "pregunta": "Docker en 5 comandos: ¿Cuáles necesito saber sí o sí?",
+      "respuesta": "<p><strong>LOS 5 COMANDOS QUE USARÁS SIEMPRE:</strong></p><ul><li><code>docker build -t mi-app:v1 .</code> → Construir imagen.</li><li><code>docker run -d -p 8080:8080 mi-app</code> → Correr container.</li><li><code>docker ps</code> → Ver qué está corriendo.</li><li><code>docker logs -f mi-container</code> → Ver logs.</li><li><code>docker exec -it mi-container sh</code> → Entrar al container.</li></ul><p><strong>BONUS:</strong> <code>docker-compose up -d</code> para levantar todo el ambiente local.</p>",
+      "analogia": "Docker = tupperware de código: empacas tu app con TODO, la cierras, funciona igual en cualquier refri (servidor).",
+      "codigo": "# DOCKERFILE para Spring Boot\nFROM eclipse-temurin:17-jre-alpine\nCOPY target/*.jar app.jar\nEXPOSE 8080\nCMD [\"java\", \"-jar\", \"app.jar\"]\n\n# Los 5 comandos\ndocker build -t mi-app:v1 .           # Construir\ndocker run -d -p 8080:8080 mi-app:v1  # Correr\ndocker ps                              # Ver corriendo\ndocker logs -f mi-app                  # Ver logs\ndocker exec -it mi-app sh              # Entrar\n\n# docker-compose.yml para desarrollo\nservices:\n  app:\n    build: .\n    ports: [\"8080:8080\"]\n  postgres:\n    image: postgres:15\n    environment:\n      POSTGRES_PASSWORD: secret\n\n# Levantar todo\ndocker-compose up -d",
+      "frase": "build, run, ps, logs, exec. Con esos 5 sobrevives. docker-compose para desarrollo local."
+    },
+    {
+      "id": 89,
+      "categoria": "cloud",
+      "dificultad": "lead",
+      "pregunta": "Kubernetes en 6 comandos: ¿Cuáles me salvan a las 3am?",
+      "respuesta": "<p><strong>LOS 6 COMANDOS QUE TE SALVAN:</strong></p><ul><li><code>kubectl get pods</code> → ¿Qué hay corriendo?</li><li><code>kubectl describe pod X</code> → ¿Por qué falló?</li><li><code>kubectl logs -f X</code> → ¿Qué dice?</li><li><code>kubectl exec -it X -- sh</code> → Entrar al pod.</li><li><code>kubectl rollout undo deployment/X</code> → ¡ROLLBACK!</li><li><code>kubectl apply -f X.yaml</code> → Desplegar cambios.</li></ul>",
+      "analogia": "kubectl = control remoto de tu datacenter. get=ver, describe=detalles, logs=qué dice, exec=entrar, rollout=gestionar versiones.",
+      "codigo": "# ¿Qué está pasando?\nkubectl get pods                    # Ver pods\nkubectl get pods -w                 # Watch en vivo\n\n# ¿Por qué falla?\nkubectl describe pod mi-pod-xyz     # Eventos y errores\nkubectl logs -f mi-pod-xyz          # Logs\n\n# Debugging\nkubectl exec -it mi-pod-xyz -- sh   # Entrar\n\n# Deploy y emergencias\nkubectl apply -f k8s/               # Aplicar yamls\nkubectl rollout undo deployment/X   # ¡ROLLBACK!\nkubectl scale deployment/X --replicas=10  # Escalar\n\n# Matar pod (K8s lo recrea)\nkubectl delete pod mi-pod-xyz",
+      "frase": "get, describe, logs, exec, rollout, apply. Los 6 comandos que te salvan a las 3am."
+    },
+    {
+      "id": 90,
+      "categoria": "reactivo",
+      "dificultad": "lead",
+      "pregunta": "¿Por qué Reactivo y no solo Async? ¿Cuál es la diferencia real?",
+      "respuesta": "<p><strong>ASYNC TRADICIONAL:</strong> 'Avísame cuando termine'. Callbacks anidados, callback hell, difícil componer.</p><p><strong>REACTIVO:</strong> STREAMS de datos con operadores. map, filter, flatMap. Backpressure incluido. Manejo de errores unificado.</p><p><strong>LA DIFERENCIA REAL:</strong> Async es 'espero tu llamada'. Reactivo es 'procesa este FLUJO de datos como quieras'.</p>",
+      "analogia": "Async = esperar llamada del delivery. Reactivo = buffet libre donde los platos llegan y tú decides cuántos puedes comer (backpressure).",
+      "codigo": "// CALLBACK HELL 😵\ngetUsuario(id, usuario -> {\n    getCuentas(usuario, cuentas -> {\n        getSaldo(cuentas, saldo -> {\n            // 3 niveles de anidación...\n        });\n    });\n});\n\n// REACTIVO 🔥 - Limpio, declarativo\nMono.just(id)\n    .flatMap(this::getUsuario)\n    .flatMap(this::getCuentas)\n    .flatMap(this::getSaldo)\n    .doOnError(e -> log.error(e.getMessage()))\n    .subscribe();\n\n// Backpressure - \"solo puedo procesar 10 a la vez\"\nFlux.fromIterable(millonDeEventos)\n    .onBackpressureBuffer(100)  // Máx 100 en cola\n    .flatMap(this::procesar, 10) // Máx 10 paralelo\n    .subscribe();",
+      "frase": "Reactivo = async con superpoderes: streams, operadores, backpressure. No es solo 'no bloquear'."
     }
   ]
 }
