@@ -1,7 +1,7 @@
 {
   "metadata": {
     "version": "1.0",
-    "totalPreguntas": 65,
+    "totalPreguntas": 72,
     "categorias": ["arquitectura", "reactivo", "resiliencia", "cloud", "data", "seguridad", "observabilidad", "liderazgo", "patrones", "azure", "fundamentos"]
   },
   "preguntas": [
@@ -654,6 +654,76 @@
       "analogia": "ADR es como acta de reunión de arquitectura: quedó documentado QUÉ se decidió, POR QUÉ, y QUÉ se descartó. No hay 'yo no sabía'.",
       "codigo": "# docs/adr/ADR-001-usar-postgresql.md\n\n# ADR-001: Usar PostgreSQL como base de datos principal\n\n## Estado\nAceptado (2024-01-15)\n\n## Contexto\nNecesitamos BD para transacciones bancarias. \nRequisitos: ACID, JSON support, performance.\n\n## Decisión\nUsaremos PostgreSQL 15.\n\n## Consecuencias\n### Positivas\n- ACID completo para transacciones\n- JSON/JSONB para flexibilidad\n- Ecosistema maduro, buen soporte\n\n### Negativas\n- Escala vertical principalmente\n- Sharding manual si crecemos mucho\n\n## Alternativas Consideradas\n- MySQL: Descartado por JSON support inferior\n- MongoDB: Descartado por necesidad de ACID\n- CockroachDB: Descartado por costo y complejidad",
       "frase": "Código sin ADRs es como edificio sin planos: nadie sabe por qué se construyó así. Documenta decisiones, no solo código."
+    },
+    {
+      "id": 66,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es un Predicate en Java y cuándo lo usas? Dame ejemplos en contexto bancario.",
+      "respuesta": "<p><strong>Predicate&lt;T&gt; = Función que recibe algo y retorna BOOLEAN (true/false):</strong></p><ul><li><strong>Firma:</strong> <code>boolean test(T t)</code></li><li><strong>Uso:</strong> Filtrar, validar, decidir si algo cumple condición.</li></ul><p><strong>MÉTODOS ÚTILES:</strong></p><ul><li><strong>and():</strong> Combinar con AND → ambos deben ser true.</li><li><strong>or():</strong> Combinar con OR → al menos uno true.</li><li><strong>negate():</strong> Invertir resultado.</li></ul><p><strong>EN BANCA:</strong> Validar si cuenta está activa, si monto es válido, si usuario tiene permisos.</p>",
+      "analogia": "Predicate es el GUARDIA que pregunta: ¿Cumples el requisito? SÍ o NO. No te da nada, solo te dice si pasas o no.",
+      "codigo": "// Predicates para validación bancaria\nPredicate<Cuenta> estaActiva = cuenta -> cuenta.getEstado().equals(\"ACTIVA\");\nPredicate<Cuenta> tieneSaldo = cuenta -> cuenta.getSaldo().compareTo(BigDecimal.ZERO) > 0;\nPredicate<BigDecimal> montoValido = monto -> monto.compareTo(BigDecimal.ZERO) > 0;\n\n// Combinando predicates\nPredicate<Cuenta> puedeTransferir = estaActiva.and(tieneSaldo);\n\n// Uso en Stream\nList<Cuenta> cuentasActivas = cuentas.stream()\n    .filter(estaActiva)  // Predicate como filtro\n    .collect(Collectors.toList());\n\n// Uso en WebFlux\npublic Mono<Cuenta> getCuentaActiva(String id) {\n    return cuentaRepo.findById(id)\n        .filter(estaActiva)  // Predicate!\n        .switchIfEmpty(Mono.error(new CuentaInactivaException()));\n}",
+      "frase": "Predicate responde SÍ o NO. Nada más. Es tu validador universal."
+    },
+    {
+      "id": 67,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es un Consumer en Java? ¿Cuándo lo usas en lugar de Function?",
+      "respuesta": "<p><strong>Consumer&lt;T&gt; = Función que RECIBE algo pero NO retorna nada (void):</strong></p><ul><li><strong>Firma:</strong> <code>void accept(T t)</code></li><li><strong>Uso:</strong> Side effects, logging, notificar, guardar.</li></ul><p><strong>VARIANTES:</strong></p><ul><li><strong>BiConsumer&lt;T,U&gt;:</strong> Recibe DOS parámetros.</li></ul><p><strong>DIFERENCIA CON FUNCTION:</strong></p><ul><li><strong>Function:</strong> Recibe → procesa → RETORNA resultado.</li><li><strong>Consumer:</strong> Recibe → procesa → NO retorna nada.</li></ul>",
+      "analogia": "Consumer es el BUZÓN: le echas la carta y listo. No esperas respuesta. Function es el CAJERO: le das dinero y te da algo a cambio.",
+      "codigo": "// Consumer para logging/notificación\nConsumer<Transferencia> logTransferencia = tx -> \n    log.info(\"Transferencia: {} -> {} por S/{}\", \n        tx.getOrigen(), tx.getDestino(), tx.getMonto());\n\nConsumer<Transferencia> notificarUsuario = tx ->\n    notificationService.enviar(tx.getUsuarioId(), \"Transferencia exitosa\");\n\n// Combinando consumers\nConsumer<Transferencia> postProceso = logTransferencia.andThen(notificarUsuario);\n\n// Uso en forEach (muy común)\ntransferencias.forEach(logTransferencia);\n\n// Uso en Reactor - doOnNext\npublic Mono<Transferencia> ejecutar(TransferenciaCmd cmd) {\n    return transferenciaService.procesar(cmd)\n        .doOnNext(logTransferencia)      // Consumer!\n        .doOnNext(notificarUsuario);     // Consumer!\n}",
+      "frase": "Consumer es 'hazlo y no me cuentes'. Perfecto para logs, métricas, notificaciones."
+    },
+    {
+      "id": 68,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es un Supplier en Java? ¿Cómo se usa para lazy evaluation?",
+      "respuesta": "<p><strong>Supplier&lt;T&gt; = Función que NO recibe nada pero RETORNA algo:</strong></p><ul><li><strong>Firma:</strong> <code>T get()</code></li><li><strong>Uso:</strong> Factory, lazy loading, valores por defecto.</li></ul><p><strong>LAZY EVALUATION:</strong></p><ul><li>El código dentro del Supplier NO se ejecuta hasta que llamas <code>.get()</code>.</li><li>Perfecto para valores costosos que quizás no necesites.</li></ul>",
+      "analogia": "Supplier es la MÁQUINA EXPENDEDORA: no le das nada, solo presionas el botón y te da algo. El producto se prepara cuando lo pides, no antes.",
+      "codigo": "// Supplier como factory\nSupplier<UUID> generarId = () -> UUID.randomUUID();\nSupplier<Instant> ahora = () -> Instant.now();\nSupplier<Cuenta> cuentaVacia = () -> Cuenta.builder().saldo(BigDecimal.ZERO).build();\n\n// Lazy evaluation - NO ejecuta hasta que se necesita\nSupplier<BigDecimal> saldoCalculado = () -> {\n    log.info(\"Calculando saldo costoso...\");\n    return calcularSaldoComplejo();  // Solo se ejecuta si se llama .get()\n};\n\n// Uso en Optional - orElseGet vs orElse\nOptional<Cuenta> cuenta = Optional.empty();\n\n// MAL - calcularDefault() se ejecuta SIEMPRE\nCuenta c1 = cuenta.orElse(calcularDefault());\n\n// BIEN - calcularDefault() solo si es vacío (Supplier!)\nCuenta c2 = cuenta.orElseGet(() -> calcularDefault());\n\n// Uso en Reactor\npublic Mono<Cuenta> getCuenta(String id) {\n    return cuentaRepo.findById(id)\n        .switchIfEmpty(Mono.fromSupplier(cuentaVacia));  // Supplier!\n}",
+      "frase": "Supplier es lazy: no trabaja hasta que le pides. Úsalo para evitar cálculos innecesarios."
+    },
+    {
+      "id": 69,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es Function en Java y cuáles son sus variantes (BiFunction, UnaryOperator, BinaryOperator)?",
+      "respuesta": "<p><strong>Function&lt;T,R&gt; = Recibe T, retorna R (transformación):</strong></p><ul><li><strong>Firma:</strong> <code>R apply(T t)</code></li></ul><p><strong>VARIANTES:</strong></p><ul><li><strong>BiFunction&lt;T,U,R&gt;:</strong> Recibe DOS, retorna uno. <code>R apply(T t, U u)</code></li><li><strong>UnaryOperator&lt;T&gt;:</strong> Recibe T, retorna T (mismo tipo). <code>T apply(T t)</code></li><li><strong>BinaryOperator&lt;T&gt;:</strong> Recibe DOS T, retorna T. <code>T apply(T t1, T t2)</code></li></ul><p><strong>MÉTODOS ÚTILES:</strong></p><ul><li><strong>andThen():</strong> Encadenar: primero esto, luego aquello.</li><li><strong>compose():</strong> Al revés: primero aquello, luego esto.</li></ul>",
+      "analogia": "Function es MÁQUINA PROCESADORA: le metes naranjas (T), salen jugo (R). UnaryOperator: metes naranjas, salen naranjas peladas (mismo tipo). BinaryOperator: metes 2 naranjas, sale 1 naranja mezclada.",
+      "codigo": "// Function<T, R> - Transforma\nFunction<Cuenta, CuentaDTO> toDTO = cuenta -> \n    new CuentaDTO(cuenta.getId(), cuenta.getSaldo());\n\nFunction<String, Integer> longitud = String::length;\n\n// BiFunction<T, U, R> - Dos inputs\nBiFunction<BigDecimal, BigDecimal, BigDecimal> calcularInteres = \n    (capital, tasa) -> capital.multiply(tasa);\n\n// UnaryOperator<T> - Mismo tipo entrada/salida\nUnaryOperator<BigDecimal> duplicar = monto -> monto.multiply(BigDecimal.valueOf(2));\nUnaryOperator<String> mayusculas = String::toUpperCase;\n\n// BinaryOperator<T> - Dos del mismo tipo\nBinaryOperator<BigDecimal> sumar = BigDecimal::add;\nBinaryOperator<BigDecimal> mayor = (a, b) -> a.compareTo(b) > 0 ? a : b;\n\n// Uso en Stream\nList<CuentaDTO> dtos = cuentas.stream()\n    .map(toDTO)  // Function!\n    .collect(Collectors.toList());\n\nBigDecimal total = montos.stream()\n    .reduce(BigDecimal.ZERO, sumar);  // BinaryOperator!",
+      "frase": "Function transforma. UnaryOperator modifica mismo tipo. BinaryOperator combina dos en uno. Memoriza estas 4."
+    },
+    {
+      "id": 70,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "¿Cuál es la diferencia entre map, flatMap y filter en Streams de Java?",
+      "respuesta": "<p><strong>Los 3 pilares de transformación en Streams:</strong></p><p><strong>🔄 MAP:</strong> Transforma CADA elemento 1 a 1.</p><ul><li>Input: Stream&lt;A&gt; → Output: Stream&lt;B&gt;</li><li>Usa: Function&lt;A,B&gt;</li></ul><p><strong>🔀 FLATMAP:</strong> Transforma Y aplana (cuando map retorna colección).</p><ul><li>Input: Stream&lt;A&gt; donde cada A produce Stream&lt;B&gt;</li><li>Output: Stream&lt;B&gt; (aplanado)</li></ul><p><strong>🚫 FILTER:</strong> Descarta elementos que no cumplen condición.</p><ul><li>Usa: Predicate&lt;A&gt;</li><li>No transforma, solo filtra.</li></ul>",
+      "analogia": "MAP es traductor: cada palabra español → inglés. FLATMAP es traductor que además separa oraciones en palabras. FILTER es guardia: solo pasan los que cumplen.",
+      "codigo": "List<Cuenta> cuentas = obtenerCuentas();\n\n// MAP - Transformar cada cuenta a su saldo\nList<BigDecimal> saldos = cuentas.stream()\n    .map(Cuenta::getSaldo)  // Cuenta → BigDecimal\n    .collect(Collectors.toList());\n\n// FILTER - Solo cuentas activas\nList<Cuenta> activas = cuentas.stream()\n    .filter(c -> c.getEstado().equals(\"ACTIVA\"))  // Predicate\n    .collect(Collectors.toList());\n\n// FLATMAP - Cada cuenta tiene lista de movimientos\n// Sin flatMap: Stream<List<Movimiento>>\n// Con flatMap: Stream<Movimiento>\nList<Movimiento> todosMovimientos = cuentas.stream()\n    .flatMap(c -> c.getMovimientos().stream())  // Aplana!\n    .collect(Collectors.toList());\n\n// Combinando los 3\nList<String> idsMovimientosGrandes = cuentas.stream()\n    .filter(c -> c.getEstado().equals(\"ACTIVA\"))      // 1. Filtrar activas\n    .flatMap(c -> c.getMovimientos().stream())        // 2. Aplanar movimientos\n    .filter(m -> m.getMonto().compareTo(new BigDecimal(\"1000\")) > 0)  // 3. Filtrar grandes\n    .map(Movimiento::getId)                            // 4. Extraer IDs\n    .collect(Collectors.toList());",
+      "frase": "map transforma 1:1, flatMap transforma y aplana, filter descarta. Son el ABC de Streams."
+    },
+    {
+      "id": 71,
+      "categoria": "fundamentos",
+      "dificultad": "senior",
+      "pregunta": "¿Qué es Optional en Java y cómo evita NullPointerException?",
+      "respuesta": "<p><strong>Optional&lt;T&gt; = Contenedor que PUEDE o NO tener valor:</strong></p><ul><li>Representa explícitamente la ausencia de valor.</li><li>Obliga a manejar el caso 'no hay dato'.</li><li>Evita NullPointerException.</li></ul><p><strong>CREAR:</strong></p><ul><li><code>Optional.of(valor)</code> - valor NO puede ser null.</li><li><code>Optional.ofNullable(valor)</code> - valor puede ser null.</li><li><code>Optional.empty()</code> - vacío explícito.</li></ul><p><strong>CONSUMIR:</strong></p><ul><li><code>isPresent()</code> - ¿Tiene valor?</li><li><code>orElse(default)</code> - Si vacío, usa default.</li><li><code>orElseGet(supplier)</code> - Si vacío, ejecuta supplier.</li><li><code>orElseThrow()</code> - Si vacío, lanza excepción.</li><li><code>ifPresent(consumer)</code> - Si tiene valor, ejecuta consumer.</li></ul>",
+      "analogia": "Optional es CAJA DE REGALO: puede tener regalo o estar vacía. En vez de abrir y que explote (NPE), primero preguntas: ¿hay algo adentro?",
+      "codigo": "// MAL - NullPointerException potential\npublic String getNombreCliente(String cuentaId) {\n    Cuenta cuenta = cuentaRepo.findById(cuentaId);  // Puede ser null!\n    return cuenta.getCliente().getNombre();  // 💥 NPE si cuenta es null\n}\n\n// BIEN - Optional explícito\npublic Optional<String> getNombreCliente(String cuentaId) {\n    return cuentaRepo.findById(cuentaId)          // Optional<Cuenta>\n        .map(Cuenta::getCliente)                   // Optional<Cliente>\n        .map(Cliente::getNombre);                  // Optional<String>\n}\n\n// Uso seguro\nString nombre = getNombreCliente(\"123\")\n    .orElse(\"Cliente Desconocido\");  // Default si vacío\n\n// Con orElseThrow\nString nombre = getNombreCliente(\"123\")\n    .orElseThrow(() -> new ClienteNoEncontradoException());\n\n// ifPresent - ejecuta solo si hay valor\ngetNombreCliente(\"123\")\n    .ifPresent(n -> log.info(\"Cliente: {}\", n));",
+      "frase": "Optional hace que 'puede no existir' sea EXPLÍCITO en el código. No más nulls sorpresa."
+    },
+    {
+      "id": 72,
+      "categoria": "fundamentos",
+      "dificultad": "lead",
+      "pregunta": "Resume las interfaces funcionales de Java: Predicate, Consumer, Supplier, Function. ¿Cuándo usar cada una?",
+      "respuesta": "<p><strong>RESUMEN - Las 4 interfaces funcionales principales:</strong></p><table><tr><th>Interface</th><th>Recibe</th><th>Retorna</th><th>Uso</th><th>Método</th></tr><tr><td><strong>Predicate&lt;T&gt;</strong></td><td>T</td><td>boolean</td><td>Filtrar, validar</td><td>test(T)</td></tr><tr><td><strong>Consumer&lt;T&gt;</strong></td><td>T</td><td>void</td><td>Logs, notificar</td><td>accept(T)</td></tr><tr><td><strong>Supplier&lt;T&gt;</strong></td><td>nada</td><td>T</td><td>Factory, lazy</td><td>get()</td></tr><tr><td><strong>Function&lt;T,R&gt;</strong></td><td>T</td><td>R</td><td>Transformar</td><td>apply(T)</td></tr></table><p><strong>VARIANTES:</strong></p><ul><li><strong>BiPredicate, BiConsumer, BiFunction:</strong> Reciben 2 parámetros.</li><li><strong>UnaryOperator&lt;T&gt;:</strong> Function donde T=R.</li><li><strong>BinaryOperator&lt;T&gt;:</strong> BiFunction donde T=U=R.</li></ul>",
+      "analogia": "PREDICATE = Guardia (¿pasas? sí/no). CONSUMER = Buzón (recibe, no devuelve). SUPPLIER = Máquina expendedora (solo da). FUNCTION = Procesador (recibe, transforma, devuelve).",
+      "codigo": "// Ejemplo completo en un servicio bancario\n@Service\npublic class TransferenciaService {\n    \n    // PREDICATE - Validación\n    private final Predicate<TransferenciaCmd> esValida = cmd ->\n        cmd.getMonto().compareTo(BigDecimal.ZERO) > 0;\n    \n    // CONSUMER - Side effects\n    private final Consumer<Transferencia> logExito = tx ->\n        log.info(\"TX exitosa: {}\", tx.getId());\n    \n    // SUPPLIER - Factory/Default\n    private final Supplier<String> generarId = () -> \n        UUID.randomUUID().toString();\n    \n    // FUNCTION - Transformación\n    private final Function<TransferenciaCmd, Transferencia> toEntity = cmd ->\n        Transferencia.builder()\n            .id(generarId.get())  // Usa Supplier\n            .origen(cmd.getOrigen())\n            .destino(cmd.getDestino())\n            .monto(cmd.getMonto())\n            .build();\n    \n    public Mono<Transferencia> ejecutar(TransferenciaCmd cmd) {\n        if (!esValida.test(cmd)) {  // Usa Predicate\n            return Mono.error(new ValidacionException());\n        }\n        return Mono.just(cmd)\n            .map(toEntity)           // Usa Function\n            .flatMap(transRepo::save)\n            .doOnSuccess(logExito);  // Usa Consumer\n    }\n}",
+      "frase": "Predicate=filtrar, Consumer=efectos, Supplier=generar, Function=transformar. Son los 4 jinetes de Java funcional."
     }
   ]
 }
