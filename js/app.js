@@ -216,11 +216,14 @@ class SimuladorEntrevista {
     mostrarRespuestaCompleta() {
         const pregunta = this.preguntasFiltradas[this.preguntaActual];
 
-        // Respuesta HTML
+        // Respuesta HTML (ya incluye la narrativa/analogía en estilo Píldora)
         document.getElementById('respuesta-content').innerHTML = pregunta.respuesta;
 
-        // Analogía
-        document.getElementById('analogia-texto').textContent = pregunta.analogia;
+        // Ocultar box de analogía (ya está integrada en la respuesta narrativa)
+        const analogiaBox = document.getElementById('analogia-box');
+        if (analogiaBox) {
+            analogiaBox.style.display = 'none';
+        }
 
         // Código (si existe)
         const codigoBox = document.getElementById('codigo-box');
@@ -237,7 +240,8 @@ class SimuladorEntrevista {
 
     mostrarPista() {
         const pregunta = this.preguntasFiltradas[this.preguntaActual];
-        const pista = pregunta.analogia.split('.')[0] + '...';
+        // Usar la frase matadora como pista
+        const pista = pregunta.frase || 'Piensa en el concepto clave...';
 
         // Mostrar toast con pista
         this.mostrarToast(`💡 Pista: ${pista}`, 'info');
